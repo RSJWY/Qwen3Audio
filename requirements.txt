@@ -1,0 +1,24 @@
+# Qwen3-TTS Application Dependencies
+
+# Core TTS library
+qwen-tts
+
+# Deep learning framework
+torch>=2.0.0
+
+# Audio processing
+soundfile
+
+# Web UI framework
+gradio>=4.0
+
+# Model downloading
+huggingface_hub
+
+# Optional: ModelScope mirror for China users
+# Uncomment if needed:
+# modelscope
+
+# Optional: Flash Attention 2 for faster inference
+# Requires CUDA and compatible GPU
+# Install separately: pip install flash-attn --no-build-isolation
