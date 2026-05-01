@@ -42,21 +42,41 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/your-username/qwen3-tts-ui.git
-cd qwen3-tts-ui
+git clone https://github.com/RSJWY/Qwen3Audio.git
+cd Qwen3Audio
 
 # 创建虚拟环境（推荐）
 python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# 或
 .venv\Scripts\activate  # Windows
+# source .venv/bin/activate  # Linux/Mac
 
-# 安装依赖
+# 【重要】先安装 CUDA 版本的 PyTorch
+# 默认 pip install torch 是 CPU 版本，必须手动安装 CUDA 版本！
+
+# 卸载 CPU 版本（如果已安装）
+pip uninstall torch torchvision torchaudio
+
+# 安装 CUDA 12.1 版本（推荐，适配 CUDA 12.x 显卡驱动）
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# 或 CUDA 11.8 版本（适配旧显卡）
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+# 安装其他依赖
 pip install -r requirements.txt
 
-# 可选：安装 Flash Attention 2 加速推理
+# 可选：安装 Flash Attention 2 加速推理（需要 CUDA GPU）
 pip install flash-attn --no-build-isolation
 ```
+
+### 验证 CUDA 安装
+
+```python
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+# 应输出: CUDA available: True
+```
+
+如果显示 `False`，说明安装的是 CPU 版本 PyTorch，请重新安装 CUDA 版本。
 
 ## 使用方法
 

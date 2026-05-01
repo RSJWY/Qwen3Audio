@@ -3,11 +3,18 @@
 # Core TTS library
 qwen-tts
 
-# Deep learning framework
-torch>=2.0.0
+# Deep learning framework - MUST INSTALL CUDA VERSION
+# First uninstall CPU version if installed:
+#   pip uninstall torch torchvision torchaudio
+# Then install CUDA version (choose based on your CUDA version):
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+# Or for CUDA 11.8:
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+# torch>=2.0.0  # Do NOT use default pip install - it gives CPU version
 
 # Audio processing
 soundfile
+sox  # Required for audio processing
 
 # Web UI framework
 gradio>=4.0
@@ -16,9 +23,8 @@ gradio>=4.0
 huggingface_hub
 
 # Optional: ModelScope mirror for China users
-# Uncomment if needed:
-# modelscope
+# pip install modelscope
 
 # Optional: Flash Attention 2 for faster inference
-# Requires CUDA and compatible GPU
-# Install separately: pip install flash-attn --no-build-isolation
+# Requires CUDA and compatible GPU, Python 3.10+
+# pip install flash-attn --no-build-isolation

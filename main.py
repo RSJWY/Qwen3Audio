@@ -86,16 +86,39 @@ def parse_args() -> AppConfig:
     )
 
 
-def ensure_device_available(config: AppConfig) -> None:
+def ensure_device_available(config: AppConfig) -> AppConfig:
+    """Check device availability and auto-fallback if needed."""
     if not config.device.lower().startswith("cuda"):
-        return
+        return config
 
     if torch.cuda.is_available():
-        return
+        return config
 
-    raise RuntimeError(
-        "CUDA is not available, but a CUDA device was requested. "
-        "Install a CUDA-enabled PyTorch build or launch with a non-CUDA device."
+    # Auto-fallback to CPU with warning
+    print("\n" + "=" * 60)
+    print("WARNING: CUDA is not available!")
+    print("=" * 60)
+    print("Possible causes:")
+    print("  1. You have CPU-only PyTorch (most common)")
+    print("  2. NVIDIA GPU drivers not installed")
+    print("  3. CUDA toolkit version mismatch")
+    print()
+    print("To fix #1 - Install CUDA-enabled PyTorch:")
+    print("  pip uninstall torch torchvision torchaudio")
+    print("  pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121")
+    print()
+    print("Falling back to CPU mode (slower inference)...")
+    print("=" * 60 + "\n")
+    
+    # Return modified config with CPU device
+    return AppConfig(
+        mode=config.mode,
+        port=config.port,
+        ip=config.ip,
+        share=config.share,
+        model_dir=config.model_dir,
+        dtype=config.dtype,
+        device="cpu",
     )
 
 
@@ -151,12 +174,13 @@ def main() -> int:
     tts_engine = None
 
     try:
-        ensure_device_available(config)
+        config = ensure_device_available(config)  # May fallback to CPU
         tts_engine = create_tts_engine(config)
         install_signal_handlers(tts_engine)
         preload_models(tts_engine, preload_targets(config.mode))
 
         print(f"\nStarting Qwen3-TTS UI on http://{config.ip}:{config.port}")
+        print(f"Device: {config.device}")
         if config.share:
             print("Creating public Gradio share link...")
         
