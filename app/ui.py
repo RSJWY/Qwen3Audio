@@ -290,7 +290,6 @@ def create_ui(tts_engine: TTSEngine) -> gr.Blocks:
                 lines=8, 
                 interactive=False,
                 value=logger.get_logs(),
-                show_copy_button=True
             )
 
         # === 事件绑定 ===
