@@ -3,9 +3,11 @@
 模型预下载脚本 - 用于离线部署前下载所有模型
 
 使用方法:
-    python download_models.py                    # 下载所有模型到默认缓存目录
+    python download_models.py                    # 下载所有模型（0.6B + 1.7B）到默认缓存目录
     python download_models.py --output ./models  # 下载到指定目录
-    python download_models.py --models custom_voice base  # 只下载指定模型
+    python download_models.py --models custom_voice base  # 只下载指定模型类型
+    python download_models.py --model-size 0.6B  # 只下载 0.6B 模型
+    python download_models.py --model-size 1.7B  # 只下载 1.7B 模型
 """
 
 import argparse
@@ -15,37 +17,56 @@ from typing import Optional, List
 
 # 模型配置
 MODEL_IDS = {
-    "tokenizer": "Qwen/Qwen3-TTS-Tokenizer-12Hz",
-    "custom_voice": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
-    "voice_design": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
-    "base": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+    "0.6B": {
+        "tokenizer": "Qwen/Qwen3-TTS-Tokenizer-12Hz",
+        "custom_voice": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+        "voice_design": "Qwen/Qwen3-TTS-12Hz-0.6B-VoiceDesign",
+        "base": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+    },
+    "1.7B": {
+        "tokenizer": "Qwen/Qwen3-TTS-Tokenizer-12Hz",
+        "custom_voice": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+        "voice_design": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+        "base": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+    },
 }
 
 MODEL_SIZES = {
-    "tokenizer": "~500MB",
-    "custom_voice": "~3.5GB",
-    "voice_design": "~3.5GB",
-    "base": "~3.5GB",
+    "0.6B": {
+        "tokenizer": "~500MB",
+        "custom_voice": "~1.5GB",
+        "voice_design": "~1.5GB",
+        "base": "~1.5GB",
+    },
+    "1.7B": {
+        "tokenizer": "~500MB",
+        "custom_voice": "~3.5GB",
+        "voice_design": "~3.5GB",
+        "base": "~3.5GB",
+    },
 }
 
 
-def download_model(model_type: str, output_dir: Path) -> bool:
+def download_model(model_type: str, model_size: str, output_dir: Path) -> bool:
     """
     下载单个模型。
-    
+
     Args:
         model_type: 模型类型 (tokenizer, custom_voice, voice_design, base)
+        model_size: 模型大小 (0.6B, 1.7B)
         output_dir: 输出目录
-        
+
     Returns:
         是否成功
     """
-    if model_type not in MODEL_IDS:
+    size_models = MODEL_IDS.get(model_size, MODEL_IDS["1.7B"])
+    if model_type not in size_models:
         print(f"❌ 未知模型类型: {model_type}")
         return False
-    
-    model_id = MODEL_IDS[model_type]
-    model_dir = output_dir / model_type
+
+    model_id = size_models[model_type]
+    size_info = MODEL_SIZES.get(model_size, MODEL_SIZES["1.7B"])
+    model_dir = output_dir / model_size / model_type
     
     # 检查是否已下载
     if model_dir.exists() and any(model_dir.iterdir()):
@@ -53,9 +74,9 @@ def download_model(model_type: str, output_dir: Path) -> bool:
         return True
     
     print(f"\n{'='*60}")
-    print(f"下载模型: {model_type}")
+    print(f"下载模型: {model_type} ({model_size})")
     print(f"HuggingFace ID: {model_id}")
-    print(f"预计大小: {MODEL_SIZES[model_type]}")
+    print(f"预计大小: {size_info.get(model_type, '未知')}")
     print(f"目标目录: {model_dir}")
     print('='*60)
     
@@ -71,7 +92,7 @@ def download_model(model_type: str, output_dir: Path) -> bool:
             resume_download=True,
         )
         
-        print(f"✅ 成功下载: {model_type}")
+        print(f"✅ 成功下载: {model_type} ({model_size})")
         return True
         
     except Exception as e:
@@ -86,7 +107,7 @@ def download_model(model_type: str, output_dir: Path) -> bool:
                 model_id=model_id,
                 cache_dir=str(model_dir),
             )
-            print(f"✅ 从 ModelScope 成功下载: {model_type}")
+            print(f"✅ 从 ModelScope 成功下载: {model_type} ({model_size})")
             return True
             
         except ImportError:
@@ -103,9 +124,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-    python download_models.py                       # 下载所有模型到默认缓存目录
+    python download_models.py                       # 下载所有模型（0.6B + 1.7B）
     python download_models.py --output ./models     # 下载到指定目录
-    python download_models.py --models tokenizer custom_voice base  # 只下载指定模型
+    python download_models.py --models tokenizer custom_voice base  # 只下载指定模型类型
+    python download_models.py --model-size 0.6B     # 只下载 0.6B 模型
+    python download_models.py --model-size 1.7B     # 只下载 1.7B 模型
     python download_models.py --for-exe             # 为 EXE 打包准备模型
         """
     )
@@ -119,9 +142,16 @@ def main():
     parser.add_argument(
         "--models", "-m",
         nargs="+",
+        choices=list(MODEL_IDS["1.7B"].keys()),
+        default=list(MODEL_IDS["1.7B"].keys()),
+        help="要下载的模型类型（默认: 全部）"
+    )
+    parser.add_argument(
+        "--model-size", "-s",
+        nargs="+",
         choices=list(MODEL_IDS.keys()),
         default=list(MODEL_IDS.keys()),
-        help="要下载的模型（默认: 全部）"
+        help="要下载的模型大小（默认: 全部，即 0.6B 和 1.7B 都下载）"
     )
     parser.add_argument(
         "--for-exe",
@@ -143,9 +173,10 @@ def main():
     print("Qwen3-TTS 模型下载工具")
     print("="*60)
     print(f"目标目录: {output_dir}")
-    print(f"下载模型: {', '.join(args.models)}")
+    print(f"模型大小: {', '.join(args.model_size)}")
+    print(f"模型类型: {', '.join(args.models)}")
     print()
-    
+
     # 计算总大小
     def parse_size(size_str: str) -> float:
         """Parse size string like '~3.5GB' or '~500MB' to float in GB."""
@@ -155,8 +186,11 @@ def main():
         elif 'MB' in s:
             return float(s.replace('MB', '').strip()) / 1000
         return float(s)
-    
-    total_size = sum(parse_size(MODEL_SIZES[m]) for m in args.models)
+
+    total_size = 0
+    for ms in args.model_size:
+        for m in args.models:
+            total_size += parse_size(MODEL_SIZES[ms][m])
     print(f"预计总下载量: ~{total_size:.1f}GB")
     print("请确保网络畅通，下载时间取决于网络速度...")
     
@@ -165,8 +199,10 @@ def main():
     
     # 下载模型
     results = {}
-    for model_type in args.models:
-        results[model_type] = download_model(model_type, output_dir)
+    for model_size in args.model_size:
+        for model_type in args.models:
+            key = f"{model_size}/{model_type}"
+            results[key] = download_model(model_type, model_size, output_dir)
     
     # 总结
     print("\n" + "="*60)

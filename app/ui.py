@@ -5,7 +5,7 @@ Qwen3-TTS Gradio 界面 - 极简版
 import gradio as gr
 from typing import Tuple, Optional
 
-from .config import SPEAKERS, LANGUAGES
+from .config import SPEAKERS, LANGUAGES, MODEL_SIZES, DEFAULT_MODEL_SIZE
 from .tts_engine import TTSEngine
 
 
@@ -15,11 +15,23 @@ LANGUAGE_CHOICES = ["Auto"] + LANGUAGES
 # 音色选项
 SPEAKER_CHOICES = list(SPEAKERS.keys())
 
+# 模型大小选项
+MODEL_SIZE_CHOICES = MODEL_SIZES  # ["0.6B", "1.7B"]
+
 
 def create_ui(tts_engine: TTSEngine) -> gr.Blocks:
     """创建极简 Gradio 界面"""
 
     # === 回调函数 ===
+    def switch_model_size(model_size, progress=gr.Progress()):
+        """切换模型大小"""
+        try:
+            progress(0.2, desc=f"切换到 {model_size} 模型...")
+            tts_engine.set_model_size(model_size)
+            return f"已切换到 {model_size} 模型", model_size
+        except Exception as e:
+            return f"切换失败: {e}", tts_engine.model_size
+
     def gen_cv(text, lang, speaker, instruct, progress=gr.Progress()):
         if not text.strip():
             return None, "请输入文本"
@@ -74,6 +86,18 @@ def create_ui(tts_engine: TTSEngine) -> gr.Blocks:
             "涵盖中文、英语、日语、韩语、德语、法语、俄语、葡萄牙语、西班牙语、意大利语等 10 种语言及多种方言音色 | "
             "基于离散多码本 LM 架构，端到端合成延迟低至 97ms"
         )
+
+        # 模型大小切换
+        with gr.Row():
+            model_size_dd = gr.Dropdown(
+                MODEL_SIZE_CHOICES,
+                value=tts_engine.model_size,
+                label="模型大小",
+                info="0.6B 訡型更轻量（~2GB），1.7B 模型质量更高（~3.5GB）"
+            )
+            model_size_btn = gr.Button("切换模型", variant="secondary")
+            model_size_status = gr.Textbox(label="模型状态", value=f"当前: {tts_engine.model_size}", interactive=False)
+        model_size_btn.click(switch_model_size, [model_size_dd], [model_size_status, model_size_dd])
 
         with gr.Tab("预设音色"):
             gr.Markdown(

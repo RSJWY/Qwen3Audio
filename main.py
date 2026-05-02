@@ -16,6 +16,7 @@ import torch
 from app.tts_engine import TTSEngine
 from app.model_manager import ModelManager
 from app.ui import create_ui
+from app.config import MODEL_SIZES, DEFAULT_MODEL_SIZE
 
 
 # Detect if running as frozen executable
@@ -39,6 +40,7 @@ class AppConfig:
     dtype: str
     device: str
     offline: bool
+    model_size: str
 
     @property
     def torch_dtype(self) -> torch.dtype:
@@ -81,6 +83,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run in offline mode (no network access, models must be pre-downloaded).",
     )
+    parser.add_argument(
+        "--model-size",
+        choices=tuple(MODEL_SIZES),
+        default=DEFAULT_MODEL_SIZE,
+        help=f"Model size to use (default: {DEFAULT_MODEL_SIZE}). 0.6B is lighter, 1.7B has higher quality.",
+    )
     return parser
 
 
@@ -99,6 +107,7 @@ def parse_args() -> AppConfig:
         dtype=args.dtype,
         device=args.device,
         offline=offline,
+        model_size=args.model_size,
     )
 
 
@@ -135,21 +144,24 @@ def ensure_device_available(config: AppConfig) -> AppConfig:
         model_dir=config.model_dir,
         dtype=config.dtype,
         device="cpu",
+        offline=config.offline,
+        model_size=config.model_size,
     )
 
 
 def create_tts_engine(config: AppConfig) -> TTSEngine:
     """Create TTSEngine with proper configuration."""
     cache_dir = Path(config.model_dir) if config.model_dir else None
-    
+
     model_manager = ModelManager(
         cache_dir=cache_dir,
         device=config.device,
         dtype=config.dtype,
         offline_mode=config.offline,
+        model_size=config.model_size,
     )
-    
-    return TTSEngine(model_manager=model_manager)
+
+    return TTSEngine(model_manager=model_manager, model_size=config.model_size)
 
 
 def preload_targets(mode: str) -> list[str]:

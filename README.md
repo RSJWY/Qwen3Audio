@@ -1,16 +1,25 @@
 # Qwen3-TTS UI
 
-现代化的 Qwen3-TTS Gradio 界面，支持三种语音合成模式：预设音色、语音设计、声音克隆。
+现代化的 Qwen3-TTS Gradio 界面，支持三种语音合成模式：预设音色、语音设计、声音克隆。支持 0.6B 和 1.7B 两种模型大小。
 
 ## 功能特性
 
-### 三大核心功能（基于 1.7B 模型）
+### 支持两种模型大小
 
-| 功能 | 模型 | 说明 |
-|------|------|------|
-| **Custom Voice** | Qwen3-TTS-12Hz-1.7B-CustomVoice | 9种预设音色 + 情感/风格指令控制 |
-| **Voice Design** | Qwen3-TTS-12Hz-1.7B-VoiceDesign | 自然语言描述设计任意音色 |
-| **Voice Clone** | Qwen3-TTS-12Hz-1.7B-Base | 3秒参考音频即可克隆声音 |
+| 模型大小 | 显存需求 | 模型体积 | 特点 |
+|---------|---------|---------|------|
+| **0.6B** | ~2GB | ~1.5GB/模型 | 轻量级，适合低显存设备 |
+| **1.7B** | ~4GB | ~3.5GB/模型 | 高质量，推荐使用 |
+
+可在 Web UI 中一键切换模型大小，无需重启服务。
+
+### 三大核心功能
+
+| 功能 | 0.6B 模型 | 1.7B 模型 | 说明 |
+|------|-----------|-----------|------|
+| **Custom Voice** | Qwen3-TTS-12Hz-0.6B-CustomVoice | Qwen3-TTS-12Hz-1.7B-CustomVoice | 9种预设音色 + 情感/风格指令控制 |
+| **Voice Design** | Qwen3-TTS-12Hz-0.6B-VoiceDesign | Qwen3-TTS-12Hz-1.7B-VoiceDesign | 自然语言描述设计任意音色 |
+| **Voice Clone** | Qwen3-TTS-12Hz-0.6B-Base | Qwen3-TTS-12Hz-1.7B-Base | 3秒参考音频即可克隆声音 |
 
 ### 预设音色（Custom Voice）
 
@@ -107,6 +116,7 @@ python main.py \
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `--mode` | none | 预加载模型：custom_voice, voice_design, base, all, none |
+| `--model-size` | 1.7B | 模型大小：0.6B（轻量）或 1.7B（高质量） |
 | `--port` | 7860 | 服务端口 |
 | `--ip` | 0.0.0.0 | 绑定地址 |
 | `--share` | False | 创建公网 Gradio 链接 |
@@ -195,7 +205,15 @@ python main.py
 
 首次运行时，模型会自动从 HuggingFace 下载到 `~/.cache/qwen3-tts/` 目录：
 
-- `Qwen/Qwen3-TTS-Tokenizer-12Hz` - 分词器
+**Tokenizer（两种大小共用）：**
+- `Qwen/Qwen3-TTS-Tokenizer-12Hz`
+
+**0.6B 模型：**
+- `Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice` - 预设音色模型
+- `Qwen/Qwen3-TTS-12Hz-0.6B-VoiceDesign` - 语音设计模型
+- `Qwen/Qwen3-TTS-12Hz-0.6B-Base` - 声音克隆模型
+
+**1.7B 模型：**
 - `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice` - 预设音色模型
 - `Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign` - 语音设计模型
 - `Qwen/Qwen3-TTS-12Hz-1.7B-Base` - 声音克隆模型
@@ -211,9 +229,12 @@ pip install modelscope  # 安装后自动使用国内镜像
 或手动下载：
 
 ```bash
-# 使用 ModelScope 下载
+# 使用 ModelScope 下载（1.7B 模型）
 pip install modelscope
-modelscope download --model Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice --local_dir ~/.cache/qwen3-tts/custom_voice
+modelscope download --model Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice --local_dir ~/.cache/qwen3-tts/1.7B/custom_voice
+
+# 下载 0.6B 模型
+modelscope download --model Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice --local_dir ~/.cache/qwen3-tts/0.6B/custom_voice
 ```
 
 ## API 使用
@@ -221,8 +242,15 @@ modelscope download --model Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice --local_dir ~/.
 ```python
 from app import TTSEngine
 
-# 初始化引擎
+# 初始化引擎（默认使用 1.7B 模型）
 engine = TTSEngine(device="cuda:0", dtype="bfloat16")
+
+# 初始化引擎（使用 0.6B 轻量模型）
+engine = TTSEngine(device="cuda:0", dtype="bfloat16", model_size="0.6B")
+
+# 运行时切换模型大小
+engine.set_model_size("0.6B")  # 切换到 0.6B
+engine.set_model_size("1.7B")  # 切换到 1.7B
 
 # 1. 预设音色生成
 audio, sr = engine.generate_custom_voice(
@@ -280,8 +308,10 @@ qwen3-tts-ui/
 
 ## 注意事项
 
-1. **GPU 显存**：1.7B 模型需要约 4GB 显存（bfloat16），建议 8GB+
-2. **首次启动**：模型下载约 3-4GB，请确保网络畅通
+### GPU 显存
+1. **0.6B 模型**：需要约 2GB 显存（bfloat16），建议 4GB+
+2. **1.7B 模型**：需要约 4GB 显存（bfloat16），建议 8GB+
+3. **首次启动**：模型下载约 1.5GB（0.6B）或 3.5GB（1.7B）/模型，请确保网络畅通
 3. **麦克风录制**：远程部署需 HTTPS 才能使用浏览器麦克风
 4. **模型切换**：三种模式共用基础模型，切换时仅需加载差异部分
 5. **EXE 打包**：打包后体积较大（约 10-15GB，含模型），请确保足够磁盘空间

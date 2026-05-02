@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional, Tuple, Union, List, Dict, Any
 
 from .model_manager import ModelManager
-from .config import SPEAKERS, LANGUAGES, DEFAULT_SAMPLE_RATE
+from .config import SPEAKERS, LANGUAGES, DEFAULT_SAMPLE_RATE, MODEL_SIZES, DEFAULT_MODEL_SIZE
 
 # Valid language values including Auto for auto-detection
 VALID_LANGUAGES = list(LANGUAGES) + ["Auto"]
@@ -30,7 +30,8 @@ class TTSEngine:
         model_manager: Optional[ModelManager] = None,
         cache_dir: Optional[Path] = None,
         device: Optional[str] = None,
-        dtype: str = "bfloat16"
+        dtype: str = "bfloat16",
+        model_size: str = DEFAULT_MODEL_SIZE
     ):
         """
         Initialize TTSEngine.
@@ -40,6 +41,7 @@ class TTSEngine:
             cache_dir: Directory for model cache
             device: Device to use ('cuda', 'cpu', or None for auto-detect)
             dtype: Model dtype ('bfloat16' or 'float16')
+            model_size: Model size to use ('0.6B' or '1.7B', default: 1.7B)
         """
         if model_manager is not None:
             self.model_manager = model_manager
@@ -47,9 +49,11 @@ class TTSEngine:
             self.model_manager = ModelManager(
                 cache_dir=cache_dir,
                 device=device,
-                dtype=dtype
+                dtype=dtype,
+                model_size=model_size
             )
         self.sample_rate = DEFAULT_SAMPLE_RATE
+        self.model_size = model_size
     
     def generate_custom_voice(
         self,
@@ -253,3 +257,20 @@ class TTSEngine:
     def unload(self):
         """Unload current model and free GPU memory."""
         self.model_manager.unload_model()
+
+    def set_model_size(self, model_size: str) -> None:
+        """
+        Switch to a different model size (0.6B or 1.7B).
+        Unloads current model and updates model_size for subsequent loads.
+        
+        Args:
+            model_size: Model size ('0.6B' or '1.7B')
+        """
+        if model_size not in MODEL_SIZES:
+            raise ValueError(f"Unknown model size: {model_size}. Must be one of {MODEL_SIZES}")
+        if model_size == self.model_size:
+            return
+        # Unload current model first (size change requires different model files)
+        self.model_manager.unload_model()
+        self.model_manager.model_size = model_size
+        self.model_size = model_size

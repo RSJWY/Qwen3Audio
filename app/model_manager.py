@@ -15,11 +15,13 @@ from huggingface_hub import snapshot_download, hf_hub_download
 from qwen_tts import Qwen3TTSModel
 
 from .config import (
-    CACHE_DIR, 
-    OFFLINE_MODELS_DIR, 
+    CACHE_DIR,
+    OFFLINE_MODELS_DIR,
     OFFLINE_MODE,
-    MODEL_IDS, 
-    DEFAULT_DTYPE, 
+    MODEL_IDS,
+    MODEL_SIZES,
+    DEFAULT_MODEL_SIZE,
+    DEFAULT_DTYPE,
     DEFAULT_ATTN_IMPLEMENTATION
 )
 
@@ -53,18 +55,25 @@ class ModelManager:
         device: Optional[str] = None,
         dtype: str = DEFAULT_DTYPE,
         attn_implementation: str = DEFAULT_ATTN_IMPLEMENTATION,
-        offline_mode: Optional[bool] = None
+        offline_mode: Optional[bool] = None,
+        model_size: str = DEFAULT_MODEL_SIZE
     ):
         """
         Initialize ModelManager.
-        
+
         Args:
             cache_dir: Directory for model cache (default: ~/.cache/qwen3-tts/)
             device: Device to load models on (default: auto-detect)
             dtype: Data type for model weights (default: bfloat16)
             attn_implementation: Attention implementation (default: flash_attention_2)
             offline_mode: Force offline mode (default: auto-detect from environment)
+            model_size: Model size to use ('0.6B' or '1.7B', default: 1.7B)
         """
+        # Validate model size
+        if model_size not in MODEL_SIZES:
+            raise ValueError(f"Unknown model size: {model_size}. Must be one of {MODEL_SIZES}")
+        self.model_size = model_size
+
         # Determine offline mode
         if offline_mode is None:
             self.offline_mode = OFFLINE_MODE or _is_frozen()
@@ -121,10 +130,11 @@ class ModelManager:
                 return cached_path
         
         # Get model ID
-        if model_type not in MODEL_IDS:
-            raise ValueError(f"Unknown model type: {model_type}. Must be one of {list(MODEL_IDS.keys())}")
-        
-        model_id = MODEL_IDS[model_type]
+        model_ids = MODEL_IDS.get(self.model_size, MODEL_IDS[DEFAULT_MODEL_SIZE])
+        if model_type not in model_ids:
+            raise ValueError(f"Unknown model type: {model_type}. Must be one of {list(model_ids.keys())}")
+
+        model_id = model_ids[model_type]
         
         # Check if already downloaded in multiple locations
         search_paths = [

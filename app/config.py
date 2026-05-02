@@ -42,12 +42,24 @@ OFFLINE_MODELS_DIR = _get_offline_models_dir()
 # Flag for offline mode (no network access)
 OFFLINE_MODE = os.environ.get('QWEN3_TTS_OFFLINE', '').lower() in ('1', 'true', 'yes')
 
-# Model IDs from HuggingFace
+# Supported model sizes
+MODEL_SIZES = ["0.6B", "1.7B"]
+DEFAULT_MODEL_SIZE = "1.7B"
+
+# Model IDs from HuggingFace (organized by size)
 MODEL_IDS = {
-    "tokenizer": "Qwen/Qwen3-TTS-Tokenizer-12Hz",
-    "custom_voice": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
-    "voice_design": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
-    "base": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+    "0.6B": {
+        "tokenizer": "Qwen/Qwen3-TTS-Tokenizer-12Hz",
+        "custom_voice": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+        "voice_design": "Qwen/Qwen3-TTS-12Hz-0.6B-VoiceDesign",
+        "base": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+    },
+    "1.7B": {
+        "tokenizer": "Qwen/Qwen3-TTS-Tokenizer-12Hz",
+        "custom_voice": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+        "voice_design": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+        "base": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+    },
 }
 
 # Supported speakers with descriptions
