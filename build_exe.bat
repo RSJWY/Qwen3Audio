@@ -5,10 +5,12 @@ echo Qwen3-TTS EXE Build Tool
 echo ============================================================
 echo.
 
-REM Activate venv if exists
+REM Must activate venv for correct site-packages detection
 if exist "%~dp0.venv\Scripts\activate.bat" (
     echo Activating virtual environment...
     call "%~dp0.venv\Scripts\activate.bat"
+) else (
+    echo WARNING: .venv not found. Using system Python.
 )
 
 python --version >nul 2>&1
@@ -34,8 +36,9 @@ if not exist "%MODELS_DIR%" (
 if exist "build" rmdir /s /q "build"
 if exist "dist" rmdir /s /q "dist"
 
-echo Building...
-pyinstaller qwen3_tts.spec --clean
+echo Building with spec file...
+echo Scanning site-packages for version files...
+pyinstaller qwen3_tts.spec --clean --noconfirm
 
 if errorlevel 1 (
     echo ERROR: Build failed

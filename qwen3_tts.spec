@@ -2,44 +2,47 @@
 """PyInstaller spec file for Qwen3-TTS"""
 
 import sys
-import site
+import os
 from pathlib import Path
 from PyInstaller.utils.hooks import copy_metadata, collect_data_files
 
 project_root = Path(SPECPATH)
 
-# Get site-packages path
-site_packages_dirs = site.getsitepackages()
-venv_site_packages = None
-for sp in site_packages_dirs:
-    if 'site-packages' in sp:
-        venv_site_packages = Path(sp)
-        break
-
-# Collect data files from gradio and dependencies
+# Collect data files
 datas = [('app/style.css', 'app')]
-datas += collect_data_files('gradio')
-datas += collect_data_files('gradio_client')
+datas += collect_data_files('gradio', include_py_files=False)
+datas += collect_data_files('gradio_client', include_py_files=False)
 
-# Collect metadata and version files for packages that need them
-packages_with_version_files = [
-    'safehttpx', 'groovy', 'httpx', 'httpcore', 'h11', 'anyio', 'sniffio',
-    'pydantic', 'pydantic_core', 'gradio', 'gradio_client', 'fastapi', 'starlette'
+# Critical packages that need version.txt or metadata
+critical_packages = [
+    'safehttpx', 'groovy', 'gradio', 'gradio_client', 
+    'httpx', 'httpcore', 'h11', 'anyio', 'sniffio',
+    'pydantic', 'pydantic_core', 'fastapi', 'starlette',
+    'python_multipart', 'sse_starlette', 'uvicorn'
 ]
 
-for pkg in packages_with_version_files:
+# Use copy_metadata for all critical packages
+for pkg in critical_packages:
     try:
         datas += copy_metadata(pkg)
-    except:
+    except Exception:
         pass
+
+# Additionally, scan all site-packages for version.txt files
+# This is the most thorough approach
+import site
+for site_path in site.getsitepackages() + [site.getusersitepackages()]:
+    site_dir = Path(site_path)
+    if not site_dir.exists():
+        continue
     
-    # Also check for version.txt in package directory
-    if venv_site_packages:
-        pkg_dir = venv_site_packages / pkg
-        if pkg_dir.exists():
-            version_file = pkg_dir / 'version.txt'
-            if version_file.exists():
-                datas.append((str(version_file), pkg))
+    # Scan all package directories for version.txt
+    for item in site_dir.iterdir():
+        if item.is_dir() and not item.name.startswith('_'):
+            version_txt = item / 'version.txt'
+            if version_txt.exists():
+                # Add (source, destination) tuple
+                datas.append((str(version_txt), item.name))
 
 a = Analysis(
     ['main.py'],
@@ -52,7 +55,8 @@ a = Analysis(
         'qwen_tts',
         'gradio', 'gradio.blocks', 'gradio.components', 'gradio.layouts', 'gradio.themes',
         'gradio.routes', 'gradio.utils', 'gradio_client', 'gradio_client.documentation',
-        'safehttpx', 'httpx', 'httpcore', 'httpcore._backends', 'httpcore._backends.sync',
+        'gradio._simple_templates', 'gradio._simple_templates.simpledropdown',
+        'safehttpx', 'groovy', 'httpx', 'httpcore', 'httpcore._backends', 'httpcore._backends.sync',
         'h11', 'h11._abnf', 'anyio', 'anyio._backends', 'anyio._core', 'sniffio',
         'soundfile', 'sox', 'scipy', 'scipy.io', 'scipy.io.wavfile', 'numpy',
         'requests', 'urllib3',
@@ -62,6 +66,7 @@ a = Analysis(
         'json', 'json.decoder', 'json.encoder',
         'typing_extensions', 'pydantic', 'pydantic_core', 'annotated_types',
         'starlette', 'fastapi', 'uvicorn',
+        'python_multipart', 'sse_starlette',
     ],
     hookspath=[],
     hooksconfig={},
