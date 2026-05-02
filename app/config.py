@@ -3,10 +3,44 @@ Configuration constants for Qwen3-TTS application
 """
 
 import os
+import sys
 from pathlib import Path
 
-# Cache directory for downloaded models
+# Determine if running as PyInstaller bundle
+def _is_frozen() -> bool:
+    """Check if running as PyInstaller bundle."""
+    return getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')
+
+def _get_bundle_dir() -> Path:
+    """Get the directory of the PyInstaller bundle or source."""
+    if _is_frozen():
+        return Path(sys._MEIPASS)
+    return Path(__file__).parent.parent
+
+def _get_offline_models_dir() -> Path:
+    """Get the offline models directory."""
+    # Priority: environment variable > bundle models/ > user home cache
+    env_dir = os.environ.get('QWEN3_TTS_MODELS_DIR', '')
+    if env_dir:
+        return Path(env_dir)
+    
+    # If running as frozen exe, check for bundled models
+    if _is_frozen():
+        bundled_models = _get_bundle_dir() / "models"
+        if bundled_models.exists():
+            return bundled_models
+    
+    # Default: user home cache (for online mode)
+    return Path.home() / ".cache" / "qwen3-tts"
+
+# Cache directory for downloaded models (online mode)
 CACHE_DIR = Path.home() / ".cache" / "qwen3-tts"
+
+# Offline models directory (for frozen/standalone deployment)
+OFFLINE_MODELS_DIR = _get_offline_models_dir()
+
+# Flag for offline mode (no network access)
+OFFLINE_MODE = os.environ.get('QWEN3_TTS_OFFLINE', '').lower() in ('1', 'true', 'yes')
 
 # Model IDs from HuggingFace
 MODEL_IDS = {

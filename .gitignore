@@ -40,6 +40,13 @@ wheels/
 *.egg
 MANIFEST
 
+# PyInstaller build artifacts
+*.spec.bak
+build/
+dist/
+*.exe
+*.app
+
 # Virtual environments
 .venv/
 venv/

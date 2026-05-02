@@ -28,3 +28,6 @@ huggingface_hub
 # Optional: Flash Attention 2 for faster inference
 # Requires CUDA and compatible GPU, Python 3.10+
 # pip install flash-attn --no-build-isolation
+
+# Optional: PyInstaller for EXE packaging
+pyinstaller>=6.0  # For building standalone executable

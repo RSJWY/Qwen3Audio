@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import signal
 import sys
 from dataclasses import dataclass
@@ -15,6 +16,10 @@ import torch
 from app.tts_engine import TTSEngine
 from app.model_manager import ModelManager
 from app.ui import create_ui
+
+
+# Detect if running as frozen executable
+IS_FROZEN = getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')
 
 
 PRELOAD_MODES = ("custom_voice", "voice_design", "base", "all", "none")
@@ -33,6 +38,7 @@ class AppConfig:
     model_dir: Optional[str]
     dtype: str
     device: str
+    offline: bool
 
     @property
     def torch_dtype(self) -> torch.dtype:
@@ -70,11 +76,20 @@ def build_parser() -> argparse.ArgumentParser:
         default="cuda:0",
         help="Torch device identifier, for example cuda:0 or cuda:1.",
     )
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Run in offline mode (no network access, models must be pre-downloaded).",
+    )
     return parser
 
 
 def parse_args() -> AppConfig:
     args = build_parser().parse_args()
+    
+    # Auto-detect offline mode from environment
+    offline = args.offline or os.environ.get('QWEN3_TTS_OFFLINE', '').lower() in ('1', 'true', 'yes')
+    
     return AppConfig(
         mode=args.mode,
         port=args.port,
@@ -83,6 +98,7 @@ def parse_args() -> AppConfig:
         model_dir=args.model_dir,
         dtype=args.dtype,
         device=args.device,
+        offline=offline,
     )
 
 
@@ -130,6 +146,7 @@ def create_tts_engine(config: AppConfig) -> TTSEngine:
         cache_dir=cache_dir,
         device=config.device,
         dtype=config.dtype,
+        offline_mode=config.offline,
     )
     
     return TTSEngine(model_manager=model_manager)
@@ -174,6 +191,18 @@ def main() -> int:
     tts_engine = None
 
     try:
+        # Print startup info
+        if IS_FROZEN:
+            print("Running as frozen executable (EXE mode)")
+        
+        if config.offline:
+            print("=" * 60)
+            print("OFFLINE MODE ENABLED")
+            print("=" * 60)
+            print("Models must be pre-downloaded.")
+            print("Run: python download_models.py --for-exe")
+            print("=" * 60 + "\n")
+        
         config = ensure_device_available(config)  # May fallback to CPU
         tts_engine = create_tts_engine(config)
         install_signal_handlers(tts_engine)
@@ -181,6 +210,8 @@ def main() -> int:
 
         print(f"\nStarting Qwen3-TTS UI on http://{config.ip}:{config.port}")
         print(f"Device: {config.device}")
+        if config.offline:
+            print("Mode: OFFLINE (no network access)")
         if config.share:
             print("Creating public Gradio share link...")
         

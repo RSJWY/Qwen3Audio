@@ -2,9 +2,11 @@
 Model Manager for Qwen3-TTS
 
 Handles model downloading, caching, and loading with GPU memory management.
+Supports both online and offline modes.
 """
 
 import os
+import sys
 import threading
 from pathlib import Path
 from typing import Optional, Callable, Dict, Any
@@ -12,7 +14,26 @@ import torch
 from huggingface_hub import snapshot_download, hf_hub_download
 from qwen_tts import Qwen3TTSModel
 
-from .config import CACHE_DIR, MODEL_IDS, DEFAULT_DTYPE, DEFAULT_ATTN_IMPLEMENTATION
+from .config import (
+    CACHE_DIR, 
+    OFFLINE_MODELS_DIR, 
+    OFFLINE_MODE,
+    MODEL_IDS, 
+    DEFAULT_DTYPE, 
+    DEFAULT_ATTN_IMPLEMENTATION
+)
+
+
+def _is_frozen() -> bool:
+    """Check if running as PyInstaller bundle."""
+    return getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')
+
+
+def _get_bundle_dir() -> Path:
+    """Get the directory of the PyInstaller bundle or source."""
+    if _is_frozen():
+        return Path(sys._MEIPASS)
+    return Path(__file__).parent.parent
 
 
 class ModelManager:
@@ -31,7 +52,8 @@ class ModelManager:
         cache_dir: Optional[Path] = None,
         device: Optional[str] = None,
         dtype: str = DEFAULT_DTYPE,
-        attn_implementation: str = DEFAULT_ATTN_IMPLEMENTATION
+        attn_implementation: str = DEFAULT_ATTN_IMPLEMENTATION,
+        offline_mode: Optional[bool] = None
     ):
         """
         Initialize ModelManager.
@@ -41,8 +63,22 @@ class ModelManager:
             device: Device to load models on (default: auto-detect)
             dtype: Data type for model weights (default: bfloat16)
             attn_implementation: Attention implementation (default: flash_attention_2)
+            offline_mode: Force offline mode (default: auto-detect from environment)
         """
-        self.cache_dir = cache_dir or CACHE_DIR
+        # Determine offline mode
+        if offline_mode is None:
+            self.offline_mode = OFFLINE_MODE or _is_frozen()
+        else:
+            self.offline_mode = offline_mode
+        
+        # Determine cache directory based on mode
+        if cache_dir is not None:
+            self.cache_dir = cache_dir
+        elif self.offline_mode:
+            self.cache_dir = OFFLINE_MODELS_DIR
+        else:
+            self.cache_dir = CACHE_DIR
+        
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         
         # Auto-detect device
@@ -90,14 +126,34 @@ class ModelManager:
         
         model_id = MODEL_IDS[model_type]
         
-        # Check if already downloaded
-        model_cache_path = self.cache_dir / model_type
-        if model_cache_path.exists() and any(model_cache_path.iterdir()):
-            self._model_paths[model_type] = str(model_cache_path)
-            return str(model_cache_path)
+        # Check if already downloaded in multiple locations
+        search_paths = [
+            self.cache_dir / model_type,  # Primary cache
+            OFFLINE_MODELS_DIR / model_type,  # Offline models dir
+        ]
         
-        # Download from HuggingFace
+        # If frozen (EXE), also check bundled models
+        if _is_frozen():
+            bundled_models = _get_bundle_dir() / "models" / model_type
+            search_paths.insert(0, bundled_models)
+        
+        for model_path in search_paths:
+            if model_path.exists() and any(model_path.iterdir()):
+                self._model_paths[model_type] = str(model_path)
+                return str(model_path)
+        
+        # Offline mode: fail if model not found
+        if self.offline_mode:
+            raise FileNotFoundError(
+                f"模型 {model_type} 未找到。离线模式下需要预先下载模型。\n"
+                f"请运行: python download_models.py --for-exe\n"
+                f"或将模型放置到: {self.cache_dir / model_type}"
+            )
+        
+        # Online mode: download from HuggingFace
         print(f"Downloading {model_type} model from {model_id}...")
+        model_cache_path = self.cache_dir / model_type
+        
         try:
             downloaded_path = snapshot_download(
                 repo_id=model_id,
@@ -227,8 +283,26 @@ class ModelManager:
             "device": self.device,
             "dtype": self.dtype,
             "cache_dir": str(self.cache_dir),
+            "offline_mode": self.offline_mode,
+            "frozen": _is_frozen(),
             "downloaded_models": [
                 model_type for model_type in MODEL_IDS.keys()
                 if self.is_model_downloaded(model_type)
             ]
         }
+    
+    def set_offline_mode(self, offline: bool) -> None:
+        """
+        Set offline mode dynamically.
+        
+        Args:
+            offline: Whether to enable offline mode
+        """
+        self.offline_mode = offline
+        if offline:
+            self.cache_dir = OFFLINE_MODELS_DIR
+        else:
+            self.cache_dir = CACHE_DIR
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        # Clear cached paths to force re-search
+        self._model_paths.clear()

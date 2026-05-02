@@ -42,7 +42,7 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/RSJWY/Qwen3Audio.git
+git clone https://github.com/RSJY/Qwen3Audio.git
 cd Qwen3Audio
 
 # 创建虚拟环境（推荐）
@@ -113,6 +113,7 @@ python main.py \
 | `--model-dir` | None | 自定义模型目录（跳过自动下载） |
 | `--dtype` | bfloat16 | 模型精度：float16, bfloat16 |
 | `--device` | cuda:0 | 设备：cuda:0, cuda:1, cpu |
+| `--offline` | False | 离线模式（模型必须预先下载） |
 
 ### 一键启动脚本
 
@@ -123,6 +124,71 @@ start.bat
 # Linux/Mac
 chmod +x start.sh
 ./start.sh
+```
+
+## 离线部署
+
+### 方案一：离线启动模式
+
+在有网络的环境下预先下载模型，然后在离线环境启动：
+
+```bash
+# 步骤1: 在有网络环境下下载模型
+python download_models.py
+
+# 步骤2: 将模型目录复制到离线机器
+# 模型位置: ~/.cache/qwen3-tts/
+
+# 步骤3: 在离线机器上启动
+python main.py --offline --mode all
+
+# 或使用离线启动脚本
+offline_start.bat  # Windows
+./offline_start.sh  # Linux/Mac
+```
+
+### 方案二：打包为 EXE（完全离线部署）
+
+将应用打包为独立可执行文件，可在无 Python 环境的机器上运行：
+
+```bash
+# 步骤1: 下载模型用于打包
+python download_models.py --for-exe
+
+# 步骤2: 打包 EXE
+build_exe.bat  # Windows
+./build_exe.sh  # Linux/Mac
+
+# 步骤3: 分发
+# 输出目录: dist/Qwen3-TTS/
+# 将整个目录复制到目标机器即可使用
+```
+
+**打包后的目录结构：**
+```
+dist/Qwen3-TTS/
+├── Qwen3-TTS.exe      # 主程序
+├── models/            # 预下载的模型（离线可用）
+│   ├── tokenizer/
+│   ├── custom_voice/
+│   ├── voice_design/
+│   └── base/
+├── _internal/         # 依赖库
+└── ...
+```
+
+### 环境变量配置
+
+| 环境变量 | 说明 |
+|---------|------|
+| `QWEN3_TTS_OFFLINE` | 设为 `1` 启用离线模式 |
+| `QWEN3_TTS_MODELS_DIR` | 自定义模型目录路径 |
+| `HF_HUB_OFFLINE` | 设为 `1` 禁用 HuggingFace 网络请求 |
+
+```bash
+# 示例：使用自定义模型目录
+export QWEN3_TTS_MODELS_DIR=/path/to/models
+python main.py
 ```
 
 ## 模型自动下载
@@ -196,6 +262,12 @@ qwen3-tts-ui/
 ├── requirements.txt     # 依赖列表
 ├── start.bat            # Windows一键启动
 ├── start.sh             # Linux/Mac一键启动
+├── offline_start.bat    # Windows离线启动
+├── offline_start.sh     # Linux/Mac离线启动
+├── download_models.py   # 模型预下载脚本
+├── build_exe.bat        # Windows EXE打包脚本
+├── build_exe.sh         # Linux/Mac EXE打包脚本
+├── qwen3_tts.spec       # PyInstaller配置
 ├── README.md            # 说明文档
 └── app/
     ├── __init__.py      # 包初始化
@@ -212,6 +284,7 @@ qwen3-tts-ui/
 2. **首次启动**：模型下载约 3-4GB，请确保网络畅通
 3. **麦克风录制**：远程部署需 HTTPS 才能使用浏览器麦克风
 4. **模型切换**：三种模式共用基础模型，切换时仅需加载差异部分
+5. **EXE 打包**：打包后体积较大（约 10-15GB，含模型），请确保足够磁盘空间
 
 ## 致谢
 
