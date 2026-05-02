@@ -12,12 +12,21 @@ datas = [('app/style.css', 'app')]
 datas += collect_data_files('gradio')
 datas += collect_data_files('gradio_client')
 
-# Collect metadata for safehttpx and other packages
-for pkg in ['safehttpx', 'httpx', 'httpcore', 'h11', 'anyio', 'sniffio']:
+# Collect metadata for packages
+for pkg in ['safehttpx', 'httpx', 'httpcore', 'h11', 'anyio', 'sniffio', 'pydantic', 'pydantic_core']:
     try:
         datas += copy_metadata(pkg)
     except:
         pass
+
+# Explicitly add safehttpx version.txt (critical for gradio)
+import site
+site_packages = site.getsitepackages()[0]
+for sp in site.getsitepackages():
+    version_txt = Path(sp) / 'safehttpx' / 'version.txt'
+    if version_txt.exists():
+        datas.append((str(version_txt), 'safehttpx'))
+        break
 
 a = Analysis(
     ['main.py'],
