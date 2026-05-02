@@ -1,139 +1,61 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""
-PyInstaller spec file for Qwen3-TTS
-
-Usage:
-    pyinstaller qwen3_tts.spec
-
-Or use the build script:
-    build_exe.bat (Windows)
-    ./build_exe.sh (Linux/Mac)
-"""
+"""PyInstaller spec file for Qwen3-TTS"""
 
 import sys
 from pathlib import Path
+from PyInstaller.utils.hooks import copy_metadata, collect_data_files
 
-# 项目根目录
 project_root = Path(SPECPATH)
 
-# 分析入口文件
+# Collect data files from gradio and dependencies
+datas = [('app/style.css', 'app')]
+datas += collect_data_files('gradio')
+datas += collect_data_files('gradio_client')
+
+# Collect metadata for safehttpx and other packages
+for pkg in ['safehttpx', 'httpx', 'httpcore', 'h11', 'anyio', 'sniffio']:
+    try:
+        datas += copy_metadata(pkg)
+    except:
+        pass
+
 a = Analysis(
     ['main.py'],
     pathex=[str(project_root)],
     binaries=[],
-    datas=[
-        # 包含样式文件
-        ('app/style.css', 'app'),
-        # 包含模型目录（如果存在）
-        # 注意：模型文件很大，建议单独分发或使用 --add-data 动态指定
-    ],
+    datas=datas,
     hiddenimports=[
-        # PyTorch 相关
-        'torch',
-        'torch.nn',
-        'torch.cuda',
-        'torch.utils',
-        'torch.utils.data',
-        
-        # HuggingFace 相关
-        'huggingface_hub',
-        'transformers',
-        'safetensors',
-        
-        # Qwen-TTS 核心
+        'torch', 'torch.nn', 'torch.cuda', 'torch.utils', 'torch.utils.data',
+        'huggingface_hub', 'transformers', 'safetensors',
         'qwen_tts',
-        
-        # Gradio 相关
-        'gradio',
-        'gradio.blocks',
-        'gradio.components',
-        'gradio.layouts',
-        'gradio.themes',
-        
-        # 音频处理
-        'soundfile',
-        'sox',
-        'scipy',
-        'numpy',
-        
-        # 网络相关
-        'requests',
-        'urllib3',
-        
-        # 其他可能需要的模块
-        'PIL',
-        'pillow',
-        'tqdm',
-        'packaging',
-        'packaging.version',
-        'packaging.specifiers',
-        'packaging.requirements',
-        
-        #编码相关
-        'encodings',
-        'encodings.utf_8',
-        'encodings.ascii',
-        
-        # asyncio 相关（Gradio需要）
-        'asyncio',
-        'asyncio.base_events',
-        'asyncio.coroutines',
+        'gradio', 'gradio.blocks', 'gradio.components', 'gradio.layouts', 'gradio.themes',
+        'gradio.routes', 'gradio.utils', 'gradio_client', 'gradio_client.documentation',
+        'safehttpx', 'httpx', 'httpcore', 'httpcore._backends', 'httpcore._backends.sync',
+        'h11', 'h11._abnf', 'anyio', 'anyio._backends', 'anyio._core', 'sniffio',
+        'soundfile', 'sox', 'scipy', 'scipy.io', 'scipy.io.wavfile', 'numpy',
+        'requests', 'urllib3',
+        'PIL', 'tqdm', 'packaging', 'packaging.version', 'packaging.specifiers',
+        'encodings', 'encodings.utf_8', 'encodings.ascii', 'encodings.cp1252',
+        'asyncio', 'asyncio.base_events', 'asyncio.coroutines',
+        'json', 'json.decoder', 'json.encoder',
+        'typing_extensions', 'pydantic', 'pydantic_core', 'annotated_types',
+        'starlette', 'fastapi', 'uvicorn',
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[
-        # 排除不需要的模块以减小体积
-        'tkinter',
-        'matplotlib',
-        'pandas',
-        'jupyter',
-        'IPython',
-        'notebook',
-    ],
+    excludes=['tkinter', 'matplotlib', 'pandas', 'jupyter', 'IPython', 'notebook'],
     noarchive=False,
     optimize=0,
 )
 
-# PYZ 压缩包
-pyz = PYZ(
-    a.pure,
-    a.zipped_data,
-    cipher=None,
-)
+pyz = PYZ(a.pure, a.zipped_data, cipher=None)
 
-# 可执行文件
 exe = EXE(
-    pyz,
-    a.scripts,
-    [],
-    exclude_binaries=True,
-    name='Qwen3-TTS',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    console=True,  # 显示控制台窗口以便查看日志
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-    icon=None,  # 可以添加图标: icon='icon.ico'
+    pyz, a.scripts, [], exclude_binaries=True, name='Qwen3-TTS',
+    debug=False, bootloader_ignore_signals=False, strip=False, upx=True,
+    console=True, disable_windowed_traceback=False, argv_emulation=False,
+    target_arch=None, codesign_identity=None, entitlements_file=None, icon=None,
 )
 
-# 收集所有文件
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    a.zipfiles,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name='Qwen3-TTS',
-)
-
-# 如果需要打包模型文件，取消下面的注释并确保 models/ 目录存在
-# models = Tree('models', prefix='models')
-# coll += models
+coll = COLLECT(exe, a.binaries, a.datas, a.zipfiles, strip=False, upx=True, upx_exclude=[], name='Qwen3-TTS')
