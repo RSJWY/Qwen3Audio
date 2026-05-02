@@ -65,46 +65,69 @@ def create_ui(tts_engine: TTSEngine) -> gr.Blocks:
 
     # === 界面 ===
     with gr.Blocks(title="Qwen3-TTS") as app:
-        gr.Markdown("# Qwen3-TTS 语音合成")
+        # 页面头部
+        gr.Markdown(
+            "# Qwen3-TTS 语音合成\n"
+            "通义千问语音合成模型 — 支持声音克隆、语音设计、超高质量拟人语音生成及自然语言语音控制"
+        )
+        gr.Markdown(
+            "涵盖中文、英语、日语、韩语、德语、法语、俄语、葡萄牙语、西班牙语、意大利语等 10 种语言及多种方言音色 | "
+            "基于离散多码本 LM 架构，端到端合成延迟低至 97ms"
+        )
 
         with gr.Tab("预设音色"):
+            gr.Markdown(
+                "**预设音色** — 提供 9 种精选音色，覆盖多种性别、年龄、语言与方言组合；"
+                "支持通过指令控制情感、风格与韵律，实现「所想即所闻」"
+            )
             with gr.Row():
                 with gr.Column():
-                    t1 = gr.Textbox(label="文本", lines=3)
+                    t1 = gr.Textbox(label="合成文本", lines=3, placeholder="请输入要合成的文本…")
                     with gr.Row():
-                        l1 = gr.Dropdown(LANGUAGE_CHOICES, value="Auto", label="语言")
-                        s1 = gr.Dropdown(SPEAKER_CHOICES, value="Vivian", label="音色")
-                    i1 = gr.Textbox(label="风格指令(可选)", lines=1)
+                        l1 = gr.Dropdown(LANGUAGE_CHOICES, value="Auto", label="语言", info="支持 10 种语言及自动检测")
+                        s1 = gr.Dropdown(SPEAKER_CHOICES, value="Vivian", label="音色", info="9 种精选预设音色")
+                    i1 = gr.Textbox(label="风格指令（可选）", lines=1, placeholder="例：用温柔的语气说 / Speak slowly and gently")
                     b1 = gr.Button("生成", variant="primary")
                     m1 = gr.Textbox(label="状态", interactive=False)
                 with gr.Column():
-                    a1 = gr.Audio(label="音频", type="numpy")
+                    a1 = gr.Audio(label="合成音频", type="numpy")
             b1.click(gen_cv, [t1, l1, s1, i1], [a1, m1])
 
         with gr.Tab("语音设计"):
+            gr.Markdown(
+                "**语音设计** — 通过自然语言描述来设计任意音色，"
+                "灵活控制音色、情感、韵律等多维声学属性"
+            )
             with gr.Row():
                 with gr.Column():
-                    t2 = gr.Textbox(label="文本", lines=3)
-                    l2 = gr.Dropdown(LANGUAGE_CHOICES, value="Auto", label="语言")
-                    i2 = gr.Textbox(label="语音描述", lines=2)
+                    t2 = gr.Textbox(label="合成文本", lines=3, placeholder="请输入要合成的文本…")
+                    l2 = gr.Dropdown(LANGUAGE_CHOICES, value="Auto", label="语言", info="支持 10 种语言及自动检测")
+                    i2 = gr.Textbox(
+                        label="语音描述", lines=2,
+                        placeholder="例：体现撒娇稚嫩的萝莉女声，音调偏高且起伏明显 / A deep, authoritative male voice with a British accent"
+                    )
                     b2 = gr.Button("生成", variant="primary")
                     m2 = gr.Textbox(label="状态", interactive=False)
                 with gr.Column():
-                    a2 = gr.Audio(label="音频", type="numpy")
+                    a2 = gr.Audio(label="合成音频", type="numpy")
             b2.click(gen_vd, [t2, l2, i2], [a2, m2])
 
         with gr.Tab("声音克隆"):
+            gr.Markdown(
+                "**声音克隆** — 仅需 3 秒参考音频即可快速克隆声音；"
+                "提供参考文本可提升克隆质量"
+            )
             with gr.Row():
                 with gr.Column():
-                    t3 = gr.Textbox(label="文本", lines=3)
-                    l3 = gr.Dropdown(LANGUAGE_CHOICES, value="Auto", label="语言")
+                    t3 = gr.Textbox(label="合成文本", lines=3, placeholder="请输入要合成的文本…")
+                    l3 = gr.Dropdown(LANGUAGE_CHOICES, value="Auto", label="语言", info="支持 10 种语言及自动检测")
                     r3 = gr.Audio(label="参考音频", type="numpy")
-                    rt3 = gr.Textbox(label="参考文本(可选)", lines=1)
-                    x3 = gr.Checkbox(label="仅用特征", value=False)
+                    rt3 = gr.Textbox(label="参考文本（可选，提供可提升克隆质量）", lines=1, placeholder="参考音频的转录文本…")
+                    x3 = gr.Checkbox(label="仅用特征（仅保留说话人身份，不做韵律匹配）", value=False)
                     b3 = gr.Button("生成", variant="primary")
                     m3 = gr.Textbox(label="状态", interactive=False)
                 with gr.Column():
-                    a3 = gr.Audio(label="音频", type="numpy")
+                    a3 = gr.Audio(label="合成音频", type="numpy")
             b3.click(gen_vc, [t3, l3, r3, rt3, x3], [a3, m3])
 
     return app
