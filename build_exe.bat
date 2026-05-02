@@ -5,6 +5,12 @@ echo Qwen3-TTS EXE Build Tool
 echo ============================================================
 echo.
 
+REM Activate venv if exists
+if exist "%~dp0.venv\Scripts\activate.bat" (
+    echo Activating virtual environment...
+    call "%~dp0.venv\Scripts\activate.bat"
+)
+
 python --version >nul 2>&1
 if errorlevel 1 (
     echo ERROR: Python not found
