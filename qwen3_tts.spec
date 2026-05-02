@@ -2,31 +2,44 @@
 """PyInstaller spec file for Qwen3-TTS"""
 
 import sys
+import site
 from pathlib import Path
 from PyInstaller.utils.hooks import copy_metadata, collect_data_files
 
 project_root = Path(SPECPATH)
+
+# Get site-packages path
+site_packages_dirs = site.getsitepackages()
+venv_site_packages = None
+for sp in site_packages_dirs:
+    if 'site-packages' in sp:
+        venv_site_packages = Path(sp)
+        break
 
 # Collect data files from gradio and dependencies
 datas = [('app/style.css', 'app')]
 datas += collect_data_files('gradio')
 datas += collect_data_files('gradio_client')
 
-# Collect metadata for packages
-for pkg in ['safehttpx', 'httpx', 'httpcore', 'h11', 'anyio', 'sniffio', 'pydantic', 'pydantic_core']:
+# Collect metadata and version files for packages that need them
+packages_with_version_files = [
+    'safehttpx', 'groovy', 'httpx', 'httpcore', 'h11', 'anyio', 'sniffio',
+    'pydantic', 'pydantic_core', 'gradio', 'gradio_client', 'fastapi', 'starlette'
+]
+
+for pkg in packages_with_version_files:
     try:
         datas += copy_metadata(pkg)
     except:
         pass
-
-# Explicitly add safehttpx version.txt (critical for gradio)
-import site
-site_packages = site.getsitepackages()[0]
-for sp in site.getsitepackages():
-    version_txt = Path(sp) / 'safehttpx' / 'version.txt'
-    if version_txt.exists():
-        datas.append((str(version_txt), 'safehttpx'))
-        break
+    
+    # Also check for version.txt in package directory
+    if venv_site_packages:
+        pkg_dir = venv_site_packages / pkg
+        if pkg_dir.exists():
+            version_file = pkg_dir / 'version.txt'
+            if version_file.exists():
+                datas.append((str(version_file), pkg))
 
 a = Analysis(
     ['main.py'],
