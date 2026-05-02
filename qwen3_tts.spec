@@ -10,8 +10,8 @@ project_root = Path(SPECPATH)
 
 # Collect data files
 datas = [('app/style.css', 'app')]
-datas += collect_data_files('gradio', include_py_files=False)
-datas += collect_data_files('gradio_client', include_py_files=False)
+datas += collect_data_files('gradio', include_py_files=True)
+datas += collect_data_files('gradio_client', include_py_files=True)
 
 # Critical packages that need version.txt or metadata
 critical_packages = [
