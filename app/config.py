@@ -47,11 +47,11 @@ MODEL_SIZES = ["0.6B", "1.7B"]
 DEFAULT_MODEL_SIZE = "1.7B"
 
 # Model IDs from HuggingFace (organized by size)
+# NOTE: 0.6B does NOT have VoiceDesign model, and CustomVoice does NOT support instruct control
 MODEL_IDS = {
     "0.6B": {
         "tokenizer": "Qwen/Qwen3-TTS-Tokenizer-12Hz",
         "custom_voice": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
-        "voice_design": "Qwen/Qwen3-TTS-12Hz-0.6B-VoiceDesign",
         "base": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
     },
     "1.7B": {
@@ -59,6 +59,22 @@ MODEL_IDS = {
         "custom_voice": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
         "voice_design": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
         "base": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+    },
+}
+
+# Model capabilities (what each model size supports)
+MODEL_CAPABILITIES = {
+    "0.6B": {
+        "custom_voice": True,       # Has CustomVoice model
+        "voice_design": False,      # NO VoiceDesign model
+        "base": True,               # Has Base model (voice clone)
+        "instruct_control": False,  # CustomVoice does NOT support instruct
+    },
+    "1.7B": {
+        "custom_voice": True,
+        "voice_design": True,
+        "base": True,
+        "instruct_control": True,   # CustomVoice supports instruct control
     },
 }
 

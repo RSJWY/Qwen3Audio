@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional, Tuple, Union, List, Dict, Any
 
 from .model_manager import ModelManager
-from .config import SPEAKERS, LANGUAGES, DEFAULT_SAMPLE_RATE, MODEL_SIZES, DEFAULT_MODEL_SIZE
+from .config import SPEAKERS, LANGUAGES, DEFAULT_SAMPLE_RATE, MODEL_SIZES, DEFAULT_MODEL_SIZE, MODEL_CAPABILITIES, MODEL_IDS
 
 # Valid language values including Auto for auto-detection
 VALID_LANGUAGES = list(LANGUAGES) + ["Auto"]
@@ -79,7 +79,12 @@ class TTSEngine:
             raise ValueError(f"Unknown speaker: {speaker}. Must be one of {list(SPEAKERS.keys())}")
         if language not in VALID_LANGUAGES:
             raise ValueError(f"Unknown language: {language}. Must be one of {VALID_LANGUAGES}")
-        
+
+        # 0.6B CustomVoice does NOT support instruct control — force ignore
+        caps = MODEL_CAPABILITIES.get(self.model_size, {})
+        if not caps.get('instruct_control', False):
+            instruct = None
+
         model = self.model_manager.load_model("custom_voice")
         
         # Qwen3TTSModel.generate_custom_voice returns (wavs, sample_rate)
@@ -125,6 +130,14 @@ class TTSEngine:
         """
         if language not in VALID_LANGUAGES:
             raise ValueError(f"Unknown language: {language}. Must be one of {VALID_LANGUAGES}")
+
+        # Check if voice_design is supported for current model size
+        caps = MODEL_CAPABILITIES.get(self.model_size, {})
+        if not caps.get('voice_design', False):
+            raise NotImplementedError(
+                f"Voice Design is not supported for {self.model_size} model. "
+                "Please use 1.7B model size for this feature."
+            )
 
         model = self.model_manager.load_model("voice_design")
         

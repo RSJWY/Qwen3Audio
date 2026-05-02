@@ -17,8 +17,9 @@
 
 | 功能 | 0.6B 模型 | 1.7B 模型 | 说明 |
 |------|-----------|-----------|------|
-| **Custom Voice** | Qwen3-TTS-12Hz-0.6B-CustomVoice | Qwen3-TTS-12Hz-1.7B-CustomVoice | 9种预设音色 + 情感/风格指令控制 |
-| **Voice Design** | Qwen3-TTS-12Hz-0.6B-VoiceDesign | Qwen3-TTS-12Hz-1.7B-VoiceDesign | 自然语言描述设计任意音色 |
+| **Custom Voice** | Qwen3-TTS-12Hz-0.6B-CustomVoice | Qwen3-TTS-12Hz-1.7B-CustomVoice | 9种预设音色 |
+| **指令控制** | ❌ 不支持 | ✅ 支持 | 情感/风格指令控制（仅 1.7B） |
+| **Voice Design** | ❌ 不存在 | Qwen3-TTS-12Hz-1.7B-VoiceDesign | 自然语言描述设计任意音色（仅 1.7B） |
 | **Voice Clone** | Qwen3-TTS-12Hz-0.6B-Base | Qwen3-TTS-12Hz-1.7B-Base | 3秒参考音频即可克隆声音 |
 
 ### 预设音色（Custom Voice）
@@ -208,13 +209,12 @@ python main.py
 **Tokenizer（两种大小共用）：**
 - `Qwen/Qwen3-TTS-Tokenizer-12Hz`
 
-**0.6B 模型：**
-- `Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice` - 预设音色模型
-- `Qwen/Qwen3-TTS-12Hz-0.6B-VoiceDesign` - 语音设计模型
+**0.6B 模型（轻量级）：**
+- `Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice` - 预设音色模型（不支持指令控制）
 - `Qwen/Qwen3-TTS-12Hz-0.6B-Base` - 声音克隆模型
 
-**1.7B 模型：**
-- `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice` - 预设音色模型
+**1.7B 模型（高质量）：**
+- `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice` - 预设音色模型（支持指令控制）
 - `Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign` - 语音设计模型
 - `Qwen/Qwen3-TTS-12Hz-1.7B-Base` - 声音克隆模型
 
@@ -252,15 +252,15 @@ engine = TTSEngine(device="cuda:0", dtype="bfloat16", model_size="0.6B")
 engine.set_model_size("0.6B")  # 切换到 0.6B
 engine.set_model_size("1.7B")  # 切换到 1.7B
 
-# 1. 预设音色生成
+# 1. 预设音色生成（1.7B 支持指令控制，0.6B 会自动忽略 instruct）
 audio, sr = engine.generate_custom_voice(
     text="你好，欢迎使用Qwen3-TTS！",
     language="Chinese",
     speaker="Vivian",
-    instruct="用温柔的语气说"  # 可选
+    instruct="用温柔的语气说"  # 仅 1.7B 有效
 )
 
-# 2. 语音设计生成
+# 2. 语音设计生成（仅 1.7B 支持）
 audio, sr = engine.generate_voice_design(
     text="Hello, this is a voice design test.",
     language="English",
@@ -313,7 +313,7 @@ qwen3-tts-ui/
 2. **1.7B 模型**：需要约 4GB 显存（bfloat16），建议 8GB+
 3. **首次启动**：模型下载约 1.5GB（0.6B）或 3.5GB（1.7B）/模型，请确保网络畅通
 3. **麦克风录制**：远程部署需 HTTPS 才能使用浏览器麦克风
-4. **模型切换**：三种模式共用基础模型，切换时仅需加载差异部分
+4. **模型切换**：0.6B 仅支持预设音色（无指令控制）和声音克隆，1.7B 支持全部功能
 5. **EXE 打包**：打包后体积较大（约 10-15GB，含模型），请确保足够磁盘空间
 
 ## 致谢

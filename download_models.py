@@ -8,6 +8,10 @@
     python download_models.py --models custom_voice base  # 只下载指定模型类型
     python download_models.py --model-size 0.6B  # 只下载 0.6B 模型
     python download_models.py --model-size 1.7B  # 只下载 1.7B 模型
+
+注意:
+    - 0.6B 没有 VoiceDesign 模型
+    - 0.6B CustomVoice 不支持指令控制（instruct）
 """
 
 import argparse
@@ -16,11 +20,11 @@ from pathlib import Path
 from typing import Optional, List
 
 # 模型配置
+# NOTE: 0.6B does NOT have VoiceDesign model, and CustomVoice does NOT support instruct control
 MODEL_IDS = {
     "0.6B": {
         "tokenizer": "Qwen/Qwen3-TTS-Tokenizer-12Hz",
         "custom_voice": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
-        "voice_design": "Qwen/Qwen3-TTS-12Hz-0.6B-VoiceDesign",
         "base": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
     },
     "1.7B": {
@@ -35,7 +39,6 @@ MODEL_SIZES = {
     "0.6B": {
         "tokenizer": "~500MB",
         "custom_voice": "~1.5GB",
-        "voice_design": "~1.5GB",
         "base": "~1.5GB",
     },
     "1.7B": {
@@ -45,6 +48,27 @@ MODEL_SIZES = {
         "base": "~3.5GB",
     },
 }
+
+# 模型能力说明
+MODEL_CAPABILITIES = {
+    "0.6B": {
+        "custom_voice": True,
+        "voice_design": False,  # 0.6B 没有 VoiceDesign
+        "base": True,
+        "instruct_control": False,  # 0.6B CustomVoice 不支持指令
+    },
+    "1.7B": {
+        "custom_voice": True,
+        "voice_design": True,
+        "base": True,
+        "instruct_control": True,
+    },
+}
+
+
+def get_available_models(model_size: str) -> List[str]:
+    """获取指定模型大小下可用的模型类型列表"""
+    return list(MODEL_IDS.get(model_size, {}).keys())
 
 
 def download_model(model_type: str, model_size: str, output_dir: Path) -> bool:
@@ -61,55 +85,55 @@ def download_model(model_type: str, model_size: str, output_dir: Path) -> bool:
     """
     size_models = MODEL_IDS.get(model_size, MODEL_IDS["1.7B"])
     if model_type not in size_models:
-        print(f"❌ 未知模型类型: {model_type}")
+        print(f"❌ 模型类型 {model_type} 在 {model_size} 中不存在")
         return False
 
     model_id = size_models[model_type]
     size_info = MODEL_SIZES.get(model_size, MODEL_SIZES["1.7B"])
     model_dir = output_dir / model_size / model_type
-    
+
     # 检查是否已下载
     if model_dir.exists() and any(model_dir.iterdir()):
-        print(f"✓ 模型已存在: {model_type} ({model_dir})")
+        print(f"✓ 模型已存在: {model_type} ({model_size}) -> {model_dir}")
         return True
-    
+
     print(f"\n{'='*60}")
     print(f"下载模型: {model_type} ({model_size})")
     print(f"HuggingFace ID: {model_id}")
     print(f"预计大小: {size_info.get(model_type, '未知')}")
     print(f"目标目录: {model_dir}")
     print('='*60)
-    
+
     try:
         from huggingface_hub import snapshot_download
-        
+
         model_dir.mkdir(parents=True, exist_ok=True)
-        
+
         snapshot_download(
             repo_id=model_id,
             local_dir=str(model_dir),
             local_dir_use_symlinks=False,
             resume_download=True,
         )
-        
+
         print(f"✅ 成功下载: {model_type} ({model_size})")
         return True
-        
+
     except Exception as e:
         print(f"❌ 下载失败 ({model_type}): {e}")
-        
+
         # 尝试 ModelScope 镜像
         try:
             print(f"\n尝试使用 ModelScope 镜像...")
             from modelscope import snapshot_download as ms_snapshot_download
-            
+
             ms_snapshot_download(
                 model_id=model_id,
                 cache_dir=str(model_dir),
             )
             print(f"✅ 从 ModelScope 成功下载: {model_type} ({model_size})")
             return True
-            
+
         except ImportError:
             print("❌ ModelScope 未安装，请运行: pip install modelscope")
             return False
@@ -126,13 +150,17 @@ def main():
 示例:
     python download_models.py                       # 下载所有模型（0.6B + 1.7B）
     python download_models.py --output ./models     # 下载到指定目录
-    python download_models.py --models tokenizer custom_voice base  # 只下载指定模型类型
+    python download_models.py --models custom_voice base  # 只下载指定模型类型
     python download_models.py --model-size 0.6B     # 只下载 0.6B 模型
     python download_models.py --model-size 1.7B     # 只下载 1.7B 模型
     python download_models.py --for-exe             # 为 EXE 打包准备模型
+
+注意:
+    - 0.6B 没有 VoiceDesign 模型
+    - 0.6B CustomVoice 不支持指令控制（instruct）
         """
     )
-    
+
     parser.add_argument(
         "--output", "-o",
         type=Path,
@@ -142,9 +170,9 @@ def main():
     parser.add_argument(
         "--models", "-m",
         nargs="+",
-        choices=list(MODEL_IDS["1.7B"].keys()),
-        default=list(MODEL_IDS["1.7B"].keys()),
-        help="要下载的模型类型（默认: 全部）"
+        choices=["tokenizer", "custom_voice", "voice_design", "base"],
+        default=None,
+        help="要下载的模型类型（默认: 全部可用模型）"
     )
     parser.add_argument(
         "--model-size", "-s",
@@ -158,9 +186,9 @@ def main():
         action="store_true",
         help="为 EXE 打包准备模型（下载到 ./models/ 目录）"
     )
-    
+
     args = parser.parse_args()
-    
+
     # 确定输出目录
     if args.for_exe:
         output_dir = Path(__file__).parent / "models"
@@ -168,13 +196,23 @@ def main():
         output_dir = args.output
     else:
         output_dir = Path.home() / ".cache" / "qwen3-tts"
-    
+
     print("\n" + "="*60)
     print("Qwen3-TTS 模型下载工具")
     print("="*60)
     print(f"目标目录: {output_dir}")
     print(f"模型大小: {', '.join(args.model_size)}")
-    print(f"模型类型: {', '.join(args.models)}")
+
+    # 显示模型能力说明
+    print("\n模型能力说明:")
+    for size in args.model_size:
+        caps = MODEL_CAPABILITIES.get(size, {})
+        print(f"  {size}:")
+        print(f"    - 预设音色: {'支持' if caps.get('custom_voice') else '不支持'}")
+        print(f"    - 语音设计: {'支持' if caps.get('voice_design') else '不支持'}")
+        print(f"    - 声音克隆: {'支持' if caps.get('base') else '不支持'}")
+        print(f"    - 指令控制: {'支持' if caps.get('instruct_control') else '不支持'}")
+
     print()
 
     # 计算总大小
@@ -189,45 +227,56 @@ def main():
 
     total_size = 0
     for ms in args.model_size:
-        for m in args.models:
-            total_size += parse_size(MODEL_SIZES[ms][m])
+        available_models = get_available_models(ms)
+        models_to_download = args.models if args.models else available_models
+        for m in models_to_download:
+            if m in MODEL_SIZES.get(ms, {}):
+                total_size += parse_size(MODEL_SIZES[ms][m])
     print(f"预计总下载量: ~{total_size:.1f}GB")
     print("请确保网络畅通，下载时间取决于网络速度...")
-    
+
     # 创建输出目录
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # 下载模型
     results = {}
     for model_size in args.model_size:
-        for model_type in args.models:
+        available_models = get_available_models(model_size)
+        models_to_download = args.models if args.models else available_models
+
+        for model_type in models_to_download:
+            # 跳过不存在的模型（如 0.6B 的 voice_design）
+            if model_type not in available_models:
+                print(f"\n⚠️  跳过: {model_size} 没有 {model_type} 模型")
+                continue
+
             key = f"{model_size}/{model_type}"
             results[key] = download_model(model_type, model_size, output_dir)
-    
+
     # 总结
     print("\n" + "="*60)
     print("下载完成总结")
     print("="*60)
-    
+
     success = sum(1 for v in results.values() if v)
     failed = sum(1 for v in results.values() if not v)
-    
+
     for model_type, ok in results.items():
         status = "✅" if ok else "❌"
         print(f"  {status} {model_type}")
-    
+
     print()
     print(f"成功: {success}/{len(results)}")
     if failed > 0:
         print(f"失败: {failed}/{len(results)}")
         return 1
-    
+
     print("\n✅ 所有模型下载完成！")
-    
+
     if args.for_exe:
         print(f"\n模型已准备用于 EXE 打包，位于: {output_dir}")
         print("运行 build_exe.bat 进行打包。")
-    
+
     return 0
 
 
