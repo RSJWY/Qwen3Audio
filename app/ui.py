@@ -77,15 +77,28 @@ def create_ui(tts_engine: TTSEngine) -> gr.Blocks:
 
         with gr.Tab("预设音色"):
             gr.Markdown(
-                "**预设音色** — 提供 9 种精选音色，覆盖多种性别、年龄、语言与方言组合；"
+                "**预设音色 (Custom Voice)** — 提供 9 种精选音色，覆盖多种性别、年龄、语言与方言组合；"
                 "支持通过指令控制情感、风格与韵律，实现「所想即所闻」"
+            )
+            gr.Markdown(
+                "| 音色 | 描述 | 母语 |\n"
+                "|------|------|------|\n"
+                "| **Vivian** | 明亮、略带锋芒的年轻女声 | 中文 |\n"
+                "| **Serena** | 温暖、柔和的年轻女声 | 中文 |\n"
+                "| **Uncle_Fu** | 低沉醇厚的成熟男声 | 中文 |\n"
+                "| **Dylan** | 清亮自然的京味年轻男声 | 京味方言 |\n"
+                "| **Eric** | 略带沙哑亮度的成都男声 | 川味方言 |\n"
+                "| **Ryan** | 节奏感强的动感男声 | English |\n"
+                "| **Aiden** | 阳光清澈的美式男中音 | English |\n"
+                "| **Ono_Anna** | 轻快俏皮的日系女声 | 日语 |\n"
+                "| **Sohee** | 温暖富有情感的韩语女声 | 韩语 |"
             )
             with gr.Row():
                 with gr.Column():
                     t1 = gr.Textbox(label="合成文本", lines=3, placeholder="请输入要合成的文本…")
                     with gr.Row():
                         l1 = gr.Dropdown(LANGUAGE_CHOICES, value="Auto", label="语言", info="支持 10 种语言及自动检测")
-                        s1 = gr.Dropdown(SPEAKER_CHOICES, value="Vivian", label="音色", info="9 种精选预设音色")
+                        s1 = gr.Dropdown(SPEAKER_CHOICES, value="Vivian", label="音色", info="详见上方表格")
                     i1 = gr.Textbox(label="风格指令（可选）", lines=1, placeholder="例：用温柔的语气说 / Speak slowly and gently")
                     b1 = gr.Button("生成", variant="primary")
                     m1 = gr.Textbox(label="状态", interactive=False)
