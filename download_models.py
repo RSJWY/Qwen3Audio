@@ -147,10 +147,16 @@ def main():
     print()
     
     # 计算总大小
-    total_size = sum(
-        float(MODEL_SIZES[m].replace('~', '').replace('GB', 'GB').replace('MB', 'MB'))
-        for m in args.models
-    )
+    def parse_size(size_str: str) -> float:
+        """Parse size string like '~3.5GB' or '~500MB' to float in GB."""
+        s = size_str.replace('~', '')
+        if 'GB' in s:
+            return float(s.replace('GB', '').strip())
+        elif 'MB' in s:
+            return float(s.replace('MB', '').strip()) / 1000
+        return float(s)
+    
+    total_size = sum(parse_size(MODEL_SIZES[m]) for m in args.models)
     print(f"预计总下载量: ~{total_size:.1f}GB")
     print("请确保网络畅通，下载时间取决于网络速度...")
     
