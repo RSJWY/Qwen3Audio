@@ -357,14 +357,14 @@ def create_ui(tts_engine: TTSEngine) -> gr.Blocks:
                 with gr.Column():
                     a3 = gr.Audio(label="合成音频", type="numpy")
 
-    # 日志窗口（页面底部）
-    with gr.Accordion("📋 操作日志", open=True):
-        log_box = gr.Textbox(
-            label="",
-            lines=6,
-            interactive=False,
-            value=logger.get_logs(),
-        )
+        # 日志窗口（页面底部）
+        with gr.Accordion("📋 操作日志", open=True):
+            log_box = gr.Textbox(
+                label="",
+                lines=6,
+                interactive=False,
+                value=logger.get_logs(),
+            )
 
         # === 事件绑定 ===
         # 隐藏的日志状态（用于传递日志）
