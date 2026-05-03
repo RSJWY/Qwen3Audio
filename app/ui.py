@@ -3,6 +3,8 @@ Qwen3-TTS Gradio 界面
 """
 
 import gradio as gr
+import time
+import torch
 from typing import Tuple, Optional, List
 from datetime import datetime
 
@@ -40,13 +42,24 @@ class UILogger:
         return "\n".join(self.logs)
 
 
+def get_gpu_memory_info() -> str:
+    """获取 GPU 显存使用信息"""
+    if torch.cuda.is_available():
+        allocated = torch.cuda.memory_allocated() / 1024**3
+        reserved = torch.cuda.memory_reserved() / 1024**3
+        return f"显存: {allocated:.1f}GB / {reserved:.1f}GB"
+    return ""
+
+
 def create_ui(tts_engine: TTSEngine) -> gr.Blocks:
     """创建 Gradio 界面"""
 
     logger = UILogger()
-    
+
     # 记录初始状态
-    logger.log(f"初始化完成，当前模型大小: {tts_engine.model_size}")
+    gpu_info = get_gpu_memory_info()
+    device_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"
+    logger.log(f"初始化完成 | 模型大小: {tts_engine.model_size} | 设备: {device_name} | {gpu_info}")
 
     def get_current_model_name(model_type: str) -> str:
         """获取当前模型的确切名称"""
@@ -71,18 +84,28 @@ def create_ui(tts_engine: TTSEngine) -> gr.Blocks:
     # === 回调函数 ===
     def switch_model_size(model_size, log_text, progress=gr.Progress()):
         """切换模型大小"""
+        start_time = time.time()
         try:
-            progress(0.2, desc=f"切换到 {model_size} 模型...")
+            gpu_info = get_gpu_memory_info()
+            log_msg = logger.log(f"切换模型: {tts_engine.model_size} -> {model_size} | {gpu_info}")
+
+            progress(0.3, desc=f"卸载当前模型...")
+            progress(0.5, desc=f"切换到 {model_size}...")
             tts_engine.set_model_size(model_size)
-            log_msg = logger.log(f"切换模型大小: {model_size}")
-            
+
             # 获取新模型信息
             caps = MODEL_CAPABILITIES.get(model_size, {})
             model_ids = MODEL_IDS.get(model_size, {})
-            
+
+            elapsed = time.time() - start_time
+            gpu_info = get_gpu_memory_info()
+            log_msg = logger.log(f"切换成功: {model_size} | 耗时: {elapsed:.1f}s | {gpu_info}")
+
             # 构建状态文本
             status = f"当前: {model_size}"
-            
+
+            progress(1.0, desc="完成")
+
             # 返回更新：日志、状态、模型信息、instruct可见性、voice_design可见性
             return (
                 log_msg,           # 日志
@@ -93,10 +116,11 @@ def create_ui(tts_engine: TTSEngine) -> gr.Blocks:
                 gr.update(visible=caps.get('voice_design', False)),       # 语音设计tab
             )
         except Exception as e:
-            log_msg = logger.log(f"切换失败: {e}")
+            elapsed = time.time() - start_time
+            log_msg = logger.log(f"切换失败 ({elapsed:.1f}s): {e}")
             return (
-                log_msg, 
-                f"切换失败: {e}", 
+                log_msg,
+                f"切换失败: {e}",
                 tts_engine.model_size,
                 get_model_info_text(),
                 gr.update(),
@@ -113,18 +137,36 @@ def create_ui(tts_engine: TTSEngine) -> gr.Blocks:
         if not caps.get('instruct_control', False):
             instruct = None  # 0.6B 不支持指令，强制忽略
         
+        start_time = time.time()
         try:
             model_name = get_current_model_name('custom_voice')
-            log_msg = logger.log(f"预设音色: 加载模型 {model_name}")
-            progress(0.3, desc="加载模型中...")
+            
+            # 阶段1: 检查模型
+            progress(0.1, desc="检查模型状态...")
+            gpu_info = get_gpu_memory_info()
+            log_msg = logger.log(f"预设音色: 开始生成 | 模型: {model_name} | 文本长度: {len(text)}字 | {gpu_info}")
+            
+            # 阶段2: 加载模型（如需要）
+            progress(0.2, desc="加载模型（首次需要下载）...")
+            
+            # 阶段3: 生成
+            progress(0.4, desc="生成音频中...")
             audio, sr = tts_engine.generate_custom_voice(
                 text=text, language=lang, speaker=speaker,
                 instruct=instruct.strip() or None if instruct else None
             )
-            log_msg = logger.log(f"预设音色: 生成成功 (模型: {model_name})")
-            return (sr, audio), f"生成成功 (模型: {model_name})", log_msg
+            
+            # 完成
+            elapsed = time.time() - start_time
+            audio_duration = len(audio) / sr
+            gpu_info = get_gpu_memory_info()
+            log_msg = logger.log(f"预设音色: 生成成功 | 耗时: {elapsed:.1f}s | 音频时长: {audio_duration:.1f}s | {gpu_info}")
+            
+            progress(1.0, desc="完成")
+            return (sr, audio), f"生成成功 | 耗时 {elapsed:.1f}s | 音频 {audio_duration:.1f}s", log_msg
         except Exception as e:
-            log_msg = logger.log(f"预设音色: 错误 - {e}")
+            elapsed = time.time() - start_time
+            log_msg = logger.log(f"预设音色: 错误 ({elapsed:.1f}s) - {e}")
             return None, f"错误: {e}", log_msg
 
     def gen_vd(text, lang, instruct, log_text, progress=gr.Progress()):
@@ -140,17 +182,32 @@ def create_ui(tts_engine: TTSEngine) -> gr.Blocks:
         if not instruct.strip():
             log_msg = logger.log("语音设计: 请输入语音描述")
             return None, "请输入语音描述", log_text
+        
+        start_time = time.time()
         try:
             model_name = get_current_model_name('voice_design')
-            log_msg = logger.log(f"语音设计: 加载模型 {model_name}")
-            progress(0.3, desc="加载模型中...")
+            
+            progress(0.1, desc="检查模型状态...")
+            gpu_info = get_gpu_memory_info()
+            log_msg = logger.log(f"语音设计: 开始生成 | 模型: {model_name} | 文本长度: {len(text)}字 | 描述: {instruct[:30]}… | {gpu_info}")
+            
+            progress(0.2, desc="加载模型（首次需要下载）...")
+            
+            progress(0.4, desc="生成音频中...")
             audio, sr = tts_engine.generate_voice_design(
                 text=text, language=lang, instruct=instruct.strip()
             )
-            log_msg = logger.log(f"语音设计: 生成成功 (模型: {model_name})")
-            return (sr, audio), f"生成成功 (模型: {model_name})", log_msg
+            
+            elapsed = time.time() - start_time
+            audio_duration = len(audio) / sr
+            gpu_info = get_gpu_memory_info()
+            log_msg = logger.log(f"语音设计: 生成成功 | 耗时: {elapsed:.1f}s | 音频时长: {audio_duration:.1f}s | {gpu_info}")
+            
+            progress(1.0, desc="完成")
+            return (sr, audio), f"生成成功 | 耗时 {elapsed:.1f}s | 音频 {audio_duration:.1f}s", log_msg
         except Exception as e:
-            log_msg = logger.log(f"语音设计: 错误 - {e}")
+            elapsed = time.time() - start_time
+            log_msg = logger.log(f"语音设计: 错误 ({elapsed:.1f}s) - {e}")
             return None, f"错误: {e}", log_msg
 
     def gen_vc(text, lang, ref_audio, ref_text, xvec, log_text, progress=gr.Progress()):
@@ -160,19 +217,36 @@ def create_ui(tts_engine: TTSEngine) -> gr.Blocks:
         if ref_audio is None:
             log_msg = logger.log("声音克隆: 请上传参考音频")
             return None, "请上传参考音频", log_text
+
+        start_time = time.time()
         try:
             model_name = get_current_model_name('base')
-            log_msg = logger.log(f"声音克隆: 加载模型 {model_name}")
-            progress(0.3, desc="加载模型中...")
+
+            progress(0.1, desc="检查模型状态...")
+            gpu_info = get_gpu_memory_info()
+            has_ref_text = "有参考文本" if ref_text and ref_text.strip() else "无参考文本"
+            mode_desc = "仅特征模式" if xvec else "韵律匹配模式"
+            log_msg = logger.log(f"声音克隆: 开始生成 | 模型: {model_name} | 文本长度: {len(text)}字 | {has_ref_text} | {mode_desc} | {gpu_info}")
+
+            progress(0.2, desc="加载模型（首次需要下载）...")
+            progress(0.3, desc="提取参考音频特征...")
+            progress(0.5, desc="生成音频中...")
             audio, sr = tts_engine.generate_voice_clone(
                 text=text, language=lang, ref_audio=ref_audio,
                 ref_text=ref_text.strip() or None,
                 x_vector_only_mode=xvec
             )
-            log_msg = logger.log(f"声音克隆: 生成成功 (模型: {model_name})")
-            return (sr, audio), f"生成成功 (模型: {model_name})", log_msg
+
+            elapsed = time.time() - start_time
+            audio_duration = len(audio) / sr
+            gpu_info = get_gpu_memory_info()
+            log_msg = logger.log(f"声音克隆: 生成成功 | 耗时: {elapsed:.1f}s | 音频时长: {audio_duration:.1f}s | {gpu_info}")
+
+            progress(1.0, desc="完成")
+            return (sr, audio), f"生成成功 | 耗时 {elapsed:.1f}s | 音频 {audio_duration:.1f}s", log_msg
         except Exception as e:
-            log_msg = logger.log(f"声音克隆: 错误 - {e}")
+            elapsed = time.time() - start_time
+            log_msg = logger.log(f"声音克隆: 错误 ({elapsed:.1f}s) - {e}")
             return None, f"错误: {e}", log_msg
 
     # 获取初始能力
@@ -283,14 +357,14 @@ def create_ui(tts_engine: TTSEngine) -> gr.Blocks:
                 with gr.Column():
                     a3 = gr.Audio(label="合成音频", type="numpy")
 
-        # 日志窗口（页面底部）
-        with gr.Accordion("📋 操作日志", open=False):
-            log_box = gr.Textbox(
-                label="", 
-                lines=8, 
-                interactive=False,
-                value=logger.get_logs(),
-            )
+    # 日志窗口（页面底部）
+    with gr.Accordion("📋 操作日志", open=True):
+        log_box = gr.Textbox(
+            label="",
+            lines=6,
+            interactive=False,
+            value=logger.get_logs(),
+        )
 
         # === 事件绑定 ===
         # 隐藏的日志状态（用于传递日志）
