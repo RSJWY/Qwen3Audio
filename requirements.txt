@@ -14,7 +14,6 @@ qwen-tts
 
 # Audio processing
 soundfile
-sox  # Required for audio processing
 
 # Web UI framework
 gradio>=4.0

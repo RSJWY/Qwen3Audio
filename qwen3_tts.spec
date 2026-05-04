@@ -58,7 +58,7 @@ a = Analysis(
         'gradio._simple_templates', 'gradio._simple_templates.simpledropdown',
         'safehttpx', 'groovy', 'httpx', 'httpcore', 'httpcore._backends', 'httpcore._backends.sync',
         'h11', 'h11._abnf', 'anyio', 'anyio._backends', 'anyio._core', 'sniffio',
-        'soundfile', 'sox', 'scipy', 'scipy.io', 'scipy.io.wavfile', 'numpy',
+        'soundfile', 'scipy', 'scipy.io', 'scipy.io.wavfile', 'numpy',
         'requests', 'urllib3',
         'PIL', 'tqdm', 'packaging', 'packaging.version', 'packaging.specifiers',
         'encodings', 'encodings.utf_8', 'encodings.ascii', 'encodings.cp1252',
