@@ -228,7 +228,7 @@ def main() -> int:
             print("Creating public Gradio share link...")
         
         ui = create_ui(tts_engine)
-        ui.launch(server_name=config.ip, server_port=config.port, share=config.share)
+        ui.launch(server_name=config.ip, server_port=config.port, share=config.share, inbrowser=True)
         return 0
         
     except KeyboardInterrupt:
