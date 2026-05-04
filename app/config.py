@@ -8,29 +8,67 @@ from pathlib import Path
 
 # Determine if running as PyInstaller bundle
 def _is_frozen() -> bool:
-    """Check if running as PyInstaller bundle."""
-    return getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')
+    """Check if running as packaged executable (PyInstaller, cx_Freeze, etc.)."""
+    # PyInstaller sets sys.frozen=True and sys._MEIPASS
+    # cx_Freeze and others set sys.frozen=True without _MEIPASS
+    return getattr(sys, 'frozen', False)
+
+def _get_exe_dir() -> Path:
+    """Get the directory where the EXE actually resides (not the temp extraction dir).
+    
+    PyInstaller unpacks _internal/ to sys._MEIPASS (a temp dir), but the EXE
+    and its sibling folders (like models/) live next to the actual executable.
+    We must look for models next to the EXE, not in the temp extraction dir.
+    """
+    if getattr(sys, 'frozen', False):
+        # sys.executable points to the actual .exe file
+        return Path(sys.executable).parent.resolve()
+    return Path(__file__).parent.parent.resolve()
 
 def _get_bundle_dir() -> Path:
-    """Get the directory of the PyInstaller bundle or source."""
-    if _is_frozen():
+    """Get the internal PyInstaller bundle directory (sys._MEIPASS) or source root.
+    
+    This is where code/resources are unpacked at runtime. 
+    For locating bundled code/data files (like style.css), use this.
+    For locating files placed next to the EXE (like models/), use _get_exe_dir().
+    """
+    if hasattr(sys, '_MEIPASS'):
         return Path(sys._MEIPASS)
-    return Path(__file__).parent.parent
+    return Path(__file__).parent.parent.resolve()
 
 def _get_offline_models_dir() -> Path:
-    """Get the offline models directory."""
-    # Priority: environment variable > bundle models/ > user home cache
+    """Get the offline models directory.
+    
+    Priority: environment variable > EXE-adjacent models/ (with actual models) > user home cache
+    
+    In frozen (EXE) mode, models/ is placed next to the EXE file, NOT inside
+    the PyInstaller _MEIPASS temp extraction directory.
+    
+    Note: This is used as a hint for the primary search location. The actual
+    model search in ModelManager._get_model_path() checks multiple locations
+    including this one, so even if this returns the user home cache, models
+    found next to the EXE will still be discovered.
+    """
+    # Highest priority: explicit environment variable
     env_dir = os.environ.get('QWEN3_TTS_MODELS_DIR', '')
     if env_dir:
         return Path(env_dir)
     
-    # If running as frozen exe, check for bundled models
+    # If running as packaged exe, check for models/ next to the EXE
     if _is_frozen():
-        bundled_models = _get_bundle_dir() / "models"
-        if bundled_models.exists():
-            return bundled_models
+        exe_adjacent_models = _get_exe_dir() / "models"
+        # Only return this if it actually contains model subdirectories
+        # (not just an empty dir created by mkdir)
+        if exe_adjacent_models.exists():
+            has_models = any(
+                (exe_adjacent_models / subdir).exists()
+                for subdir in ("custom_voice", "voice_design", "base", "tokenizer",
+                               "0.6B", "1.7B")
+            )
+            if has_models:
+                return exe_adjacent_models
     
-    # Default: user home cache (for online mode)
+    # Default: user home cache (works for both online and offline)
     return Path.home() / ".cache" / "qwen3-tts"
 
 # Cache directory for downloaded models (online mode)

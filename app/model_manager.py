@@ -27,15 +27,53 @@ from .config import (
 
 
 def _is_frozen() -> bool:
-    """Check if running as PyInstaller bundle."""
-    return getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')
+    """Check if running as packaged executable (PyInstaller, cx_Freeze, etc.)."""
+    return getattr(sys, 'frozen', False)
+
+
+def _get_exe_dir() -> Path:
+    """Get the directory where the EXE actually resides.
+    
+    Models are placed next to the EXE (e.g. dist/Qwen3-TTS/models/),
+    NOT inside the PyInstaller temp extraction dir (sys._MEIPASS).
+    """
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).parent.resolve()
+    return Path(__file__).parent.parent.resolve()
 
 
 def _get_bundle_dir() -> Path:
-    """Get the directory of the PyInstaller bundle or source."""
-    if _is_frozen():
+    """Get the internal PyInstaller bundle directory or source root.
+    
+    For locating code/data resources (like style.css inside the bundle).
+    For locating files next to the EXE (like models/), use _get_exe_dir().
+    """
+    if hasattr(sys, '_MEIPASS'):
         return Path(sys._MEIPASS)
-    return Path(__file__).parent.parent
+    return Path(__file__).parent.parent.resolve()
+
+
+def _is_valid_model_dir(path: Path) -> bool:
+    """Check if a directory contains actual model files (not just empty/metadata dirs)."""
+    if not path.exists():
+        return False
+    try:
+        # A valid model dir should contain at least config.json or model files
+        # Exclude dirs that only have HF metadata (.cache, .lock, ._____temp)
+        meaningful_files = [
+            f for f in path.iterdir()
+            if f.name not in ('.cache', '.lock', '._____temp', '.gitattributes')
+            and not f.name.startswith('models--')  # HF hub cache format
+        ]
+        # Check for config.json as a reliable indicator of a real model dir
+        has_config = (path / "config.json").exists()
+        has_safetensors = any(
+            f.name.endswith('.safetensors') or f.name.endswith('.bin')
+            for f in path.iterdir() if f.is_file()
+        )
+        return has_config or has_safetensors or len(meaningful_files) > 0
+    except (OSError, PermissionError):
+        return False
 
 
 class ModelManager:
@@ -79,13 +117,17 @@ class ModelManager:
             self.offline_mode = OFFLINE_MODE or _is_frozen()
         else:
             self.offline_mode = offline_mode
-        
-        # Determine cache directory based on mode
+
+        # Determine cache directory: always use user home cache as base
+        # The _get_model_path method searches multiple locations, so even in
+        # offline mode, it will find models in ~/.cache/qwen3-tts/ if they exist.
         if cache_dir is not None:
             self.cache_dir = cache_dir
-        elif self.offline_mode:
-            self.cache_dir = OFFLINE_MODELS_DIR
         else:
+            # Always use user home cache as primary cache_dir.
+            # This ensures models downloaded via `python main.py` (online mode)
+            # are found even when the EXE is run in offline/frozen mode.
+            # _get_model_path will also check EXE-adjacent models/ and OFFLINE_MODELS_DIR.
             self.cache_dir = CACHE_DIR
         
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -113,6 +155,17 @@ class ModelManager:
         """
         Get or download model path.
         
+        Search order:
+        1. Explicit local_dir (if provided)
+        2. Previously cached path for this model_type
+        3. EXE-adjacent models/ with model_size subdirectory (frozen mode)
+        4. EXE-adjacent models/ without model_size subdirectory (frozen mode)
+        5. Primary cache_dir with model_size subdirectory
+        6. Primary cache_dir without model_size subdirectory
+        7. User home cache (~/.cache/qwen3-tts/) with model_size subdirectory
+        8. User home cache without model_size subdirectory
+        9. Download from HuggingFace (online mode only)
+        
         Args:
             model_type: One of 'custom_voice', 'voice_design', 'base', 'tokenizer'
             local_dir: Optional local directory path for the model
@@ -123,41 +176,61 @@ class ModelManager:
         if local_dir and os.path.exists(local_dir):
             return local_dir
         
-        # Check cache
+        # Check in-memory path cache
         if model_type in self._model_paths:
             cached_path = self._model_paths[model_type]
             if os.path.exists(cached_path):
                 return cached_path
         
-        # Get model ID
+        # Get model ID for validation
         model_ids = MODEL_IDS.get(self.model_size, MODEL_IDS[DEFAULT_MODEL_SIZE])
         if model_type not in model_ids:
             raise ValueError(f"Unknown model type: {model_type}. Must be one of {list(model_ids.keys())}")
 
         model_id = model_ids[model_type]
         
-        # Check if already downloaded in multiple locations
-        search_paths = [
-            self.cache_dir / model_type,  # Primary cache
-            OFFLINE_MODELS_DIR / model_type,  # Offline models dir
-        ]
+        # Build comprehensive search paths
+        # The model files can be organized in two layouts:
+        #   Layout A (with model_size): base_dir/1.7B/custom_voice/
+        #   Layout B (flat):            base_dir/custom_voice/
+        # Both layouts exist in practice, so we search both.
+        search_paths = []
         
-        # If frozen (EXE), also check bundled models
+        # 1. If frozen (EXE), check models/ next to the EXE first
         if _is_frozen():
-            bundled_models = _get_bundle_dir() / "models" / model_type
-            search_paths.insert(0, bundled_models)
+            exe_models = _get_exe_dir() / "models"
+            search_paths.append(exe_models / self.model_size / model_type)  # Layout A
+            search_paths.append(exe_models / model_type)                    # Layout B
         
+        # 2. Check primary cache_dir (may be offline dir or user-specified dir)
+        search_paths.append(self.cache_dir / self.model_size / model_type)  # Layout A
+        search_paths.append(self.cache_dir / model_type)                    # Layout B
+        
+        # 3. Always check user home cache as fallback (even in offline mode!)
+        #    Users may have downloaded models via download_models.py or normal online use
+        if CACHE_DIR != self.cache_dir:
+            search_paths.append(CACHE_DIR / self.model_size / model_type)   # Layout A
+            search_paths.append(CACHE_DIR / model_type)                     # Layout B
+        
+        # 4. Also check the OFFLINE_MODELS_DIR if different from cache_dir
+        if OFFLINE_MODELS_DIR != self.cache_dir and OFFLINE_MODELS_DIR != CACHE_DIR:
+            search_paths.append(OFFLINE_MODELS_DIR / self.model_size / model_type)  # Layout A
+            search_paths.append(OFFLINE_MODELS_DIR / model_type)                     # Layout B
+        
+        # Search all paths
         for model_path in search_paths:
-            if model_path.exists() and any(model_path.iterdir()):
+            if _is_valid_model_dir(model_path):
                 self._model_paths[model_type] = str(model_path)
+                print(f"Found local model {model_type} at: {model_path}")
                 return str(model_path)
         
-        # Offline mode: fail if model not found
+        # Offline mode: fail if model not found anywhere
         if self.offline_mode:
+            searched = "\n  ".join(str(p) for p in search_paths)
             raise FileNotFoundError(
-                f"模型 {model_type} 未找到。离线模式下需要预先下载模型。\n"
-                f"请运行: python download_models.py --for-exe\n"
-                f"或将模型放置到: {self.cache_dir / model_type}"
+                f"模型 {model_type} ({self.model_size}) 未找到。离线模式下需要预先下载模型。\n"
+                f"请运行: python download_models.py\n"
+                f"或将模型放置到以下任一位置:\n  {searched}"
             )
         
         # Online mode: download from HuggingFace
@@ -270,16 +343,34 @@ class ModelManager:
     
     def is_model_downloaded(self, model_type: str) -> bool:
         """
-        Check if a model is already downloaded.
+        Check if a model is already downloaded in any searchable location.
         
         Args:
             model_type: One of 'custom_voice', 'voice_design', 'base', 'tokenizer'
             
         Returns:
-            True if model exists locally
+            True if model exists locally in any searchable location
         """
-        model_cache_path = self.cache_dir / model_type
-        return model_cache_path.exists() and any(model_cache_path.iterdir())
+        # Build the same search paths as _get_model_path
+        search_paths = []
+        
+        if _is_frozen():
+            exe_models = _get_exe_dir() / "models"
+            search_paths.append(exe_models / self.model_size / model_type)
+            search_paths.append(exe_models / model_type)
+        
+        search_paths.append(self.cache_dir / self.model_size / model_type)
+        search_paths.append(self.cache_dir / model_type)
+        
+        if CACHE_DIR != self.cache_dir:
+            search_paths.append(CACHE_DIR / self.model_size / model_type)
+            search_paths.append(CACHE_DIR / model_type)
+        
+        if OFFLINE_MODELS_DIR != self.cache_dir and OFFLINE_MODELS_DIR != CACHE_DIR:
+            search_paths.append(OFFLINE_MODELS_DIR / self.model_size / model_type)
+            search_paths.append(OFFLINE_MODELS_DIR / model_type)
+        
+        return any(_is_valid_model_dir(p) for p in search_paths)
     
     def get_model_info(self) -> Dict[str, Any]:
         """
@@ -305,14 +396,15 @@ class ModelManager:
         """
         Set offline mode dynamically.
         
+        Note: cache_dir always stays as CACHE_DIR (user home cache).
+        The _get_model_path method searches multiple locations including
+        EXE-adjacent models/ and OFFLINE_MODELS_DIR as fallbacks.
+        
         Args:
             offline: Whether to enable offline mode
         """
         self.offline_mode = offline
-        if offline:
-            self.cache_dir = OFFLINE_MODELS_DIR
-        else:
-            self.cache_dir = CACHE_DIR
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-        # Clear cached paths to force re-search
+        # Keep cache_dir as CACHE_DIR so models downloaded in online mode
+        # are still found when switching to offline mode.
+        # _get_model_path searches multiple locations regardless of cache_dir.
         self._model_paths.clear()
