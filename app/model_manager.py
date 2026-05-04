@@ -58,22 +58,54 @@ def _is_valid_model_dir(path: Path) -> bool:
     if not path.exists():
         return False
     try:
-        # A valid model dir should contain at least config.json or model files
-        # Exclude dirs that only have HF metadata (.cache, .lock, ._____temp)
-        meaningful_files = [
-            f for f in path.iterdir()
-            if f.name not in ('.cache', '.lock', '._____temp', '.gitattributes')
-            and not f.name.startswith('models--')  # HF hub cache format
-        ]
         # Check for config.json as a reliable indicator of a real model dir
         has_config = (path / "config.json").exists()
         has_safetensors = any(
             f.name.endswith('.safetensors') or f.name.endswith('.bin')
             for f in path.iterdir() if f.is_file()
         )
-        return has_config or has_safetensors or len(meaningful_files) > 0
+        return has_config or has_safetensors
     except (OSError, PermissionError):
         return False
+
+
+def _find_actual_model_dir(base_path: Path, max_depth: int = 3) -> Optional[Path]:
+    """Find the actual model directory containing config.json.
+    
+    HuggingFace snapshot_download may create nested structures like:
+        models/custom_voice/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice/config.json
+    
+    This function searches for the deepest directory containing config.json.
+    
+    Args:
+        base_path: Starting directory to search
+        max_depth: Maximum recursion depth (default 3)
+    
+    Returns:
+        Path to the directory containing config.json, or None if not found
+    """
+    if not base_path.exists():
+        return None
+    
+    # Check if this directory directly contains config.json
+    if _is_valid_model_dir(base_path):
+        return base_path
+    
+    if max_depth <= 0:
+        return None
+    
+    # Search subdirectories (skip HF metadata dirs)
+    skip_dirs = {'.cache', '.lock', '._____temp', '.git', '__pycache__'}
+    try:
+        for item in base_path.iterdir():
+            if item.is_dir() and item.name not in skip_dirs and not item.name.startswith('models--'):
+                result = _find_actual_model_dir(item, max_depth - 1)
+                if result is not None:
+                    return result
+    except (OSError, PermissionError):
+        pass
+    
+    return None
 
 
 class ModelManager:
@@ -217,12 +249,14 @@ class ModelManager:
             search_paths.append(OFFLINE_MODELS_DIR / self.model_size / model_type)  # Layout A
             search_paths.append(OFFLINE_MODELS_DIR / model_type)                     # Layout B
         
-        # Search all paths
+        # Search all paths - use _find_actual_model_dir to handle nested structures
+        # (e.g. models/custom_voice/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice/config.json)
         for model_path in search_paths:
-            if _is_valid_model_dir(model_path):
-                self._model_paths[model_type] = str(model_path)
-                print(f"Found local model {model_type} at: {model_path}")
-                return str(model_path)
+            actual_dir = _find_actual_model_dir(model_path)
+            if actual_dir is not None:
+                self._model_paths[model_type] = str(actual_dir)
+                print(f"Found local model {model_type} at: {actual_dir}")
+                return str(actual_dir)
         
         # Offline mode: fail if model not found anywhere
         if self.offline_mode:
@@ -370,7 +404,7 @@ class ModelManager:
             search_paths.append(OFFLINE_MODELS_DIR / self.model_size / model_type)
             search_paths.append(OFFLINE_MODELS_DIR / model_type)
         
-        return any(_is_valid_model_dir(p) for p in search_paths)
+        return any(_find_actual_model_dir(p) is not None for p in search_paths)
     
     def get_model_info(self) -> Dict[str, Any]:
         """
